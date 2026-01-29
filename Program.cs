@@ -100,6 +100,8 @@ record GameStateView(
     bool Started,
     string CurrentPlayerId,
     string CurrentPlayerName,
+    bool GameOver,
+    string? WinnerMessage,
     List<PlayerView> Players,
     List<CardView> YourHand,
     string? LastEvent
@@ -111,6 +113,8 @@ record PlayerView(
     int Hp,
     int MaxHp,
     bool IsAlive,
+    string Role,
+    bool RoleRevealed,
     string CharacterName,
     string CharacterDescription,
     string CharacterPortrait
@@ -140,6 +144,8 @@ class GameState
     private int _turnIndex;
 
     public bool Started { get; private set; }
+    public bool GameOver { get; private set; }
+    public string? WinnerMessage { get; private set; }
     public string? LastEvent { get; private set; }
 
     public CommandResult TryAddPlayer(string name)
@@ -186,19 +192,23 @@ class GameState
             }
 
             Started = true;
+            GameOver = false;
+            WinnerMessage = null;
             BuildDeck();
             ShuffleDeck();
-            _turnIndex = 0;
 
+            AssignRoles();
             foreach (var player in _players.Values)
             {
                 player.ResetForNewGame();
                 DrawCards(player, StartingHand);
             }
 
+            _turnIndex = Math.Max(0, _turnOrder.FindIndex(id => _players[id].Role == Role.Sheriff));
             var current = _players[_turnOrder[_turnIndex]];
             DrawCards(current, GetStartTurnDrawCount(current));
-            LastEvent = $"Game started! {current.Name} takes the first turn.";
+            current.ResetTurnFlags();
+            LastEvent = $"Game started! {current.Name} takes the first turn as Sheriff.";
 
             return new CommandResult(true, "Game started.", ToView(playerId));
         }
@@ -213,6 +223,11 @@ class GameState
                 return new CommandResult(false, "Game has not started.");
             }
 
+            if (GameOver)
+            {
+                return new CommandResult(false, "Game is over. Start a new round to play again.");
+            }
+
             if (!IsPlayersTurn(playerId))
             {
                 return new CommandResult(false, "Not your turn.");
@@ -223,30 +238,56 @@ class GameState
                 return new CommandResult(false, "Unknown player.");
             }
 
+            if (!player.IsAlive)
+            {
+                return new CommandResult(false, "You are out of the game.");
+            }
+
             if (index < 0 || index >= player.Hand.Count)
             {
                 return new CommandResult(false, "Card index out of range.");
             }
 
             var card = player.Hand[index];
+            if (card.Type == CardType.Bang && player.BangsPlayedThisTurn >= 1)
+            {
+                return new CommandResult(false, "You can only play one Bang! each turn.");
+            }
+
+            PlayerState? target = null;
+            if (card.RequiresTarget && !TryGetTarget(targetId, out target, out var error))
+            {
+                return new CommandResult(false, error);
+            }
+
             player.Hand.RemoveAt(index);
             _discardPile.Add(card);
 
             var message = card.Type switch
             {
-                CardType.Bang => ResolveBang(player, targetId),
+                CardType.Bang => ResolveBang(player, target!),
                 CardType.Beer => ResolveBeer(player),
                 CardType.Gatling => ResolveGatling(player),
                 CardType.Stagecoach => ResolveStagecoach(player),
-                CardType.CatBalou => ResolveCatBalou(player, targetId),
+                CardType.CatBalou => ResolveCatBalou(player, target!),
                 CardType.Indians => ResolveIndians(player),
-                CardType.Duel => ResolveDuel(player, targetId),
-                CardType.Panic => ResolvePanic(player, targetId),
+                CardType.Duel => ResolveDuel(player, target!),
+                CardType.Panic => ResolvePanic(player, target!),
                 CardType.Saloon => ResolveSaloon(player),
                 CardType.WellsFargo => ResolveWellsFargo(player),
                 CardType.GeneralStore => ResolveGeneralStore(player),
                 _ => "Card had no effect."
             };
+
+            if (card.Type == CardType.Bang)
+            {
+                player.BangsPlayedThisTurn += 1;
+            }
+
+            if (GameOver && !string.IsNullOrWhiteSpace(WinnerMessage))
+            {
+                message = WinnerMessage;
+            }
 
             LastEvent = message;
             return new CommandResult(true, message, ToView(playerId));
@@ -262,12 +303,22 @@ class GameState
                 return new CommandResult(false, "Game has not started.");
             }
 
+            if (GameOver)
+            {
+                return new CommandResult(false, "Game is over. Start a new round to play again.");
+            }
+
             if (!IsPlayersTurn(playerId))
             {
                 return new CommandResult(false, "Not your turn.");
             }
 
             var endingPlayer = _players[_turnOrder[_turnIndex]];
+            if (!endingPlayer.IsAlive)
+            {
+                return new CommandResult(false, "You are out of the game.");
+            }
+
             if (endingPlayer.Character.Ability == CharacterAbility.DrawWhenEmpty && endingPlayer.Hand.Count == 0)
             {
                 DrawCards(endingPlayer, 1);
@@ -318,6 +369,8 @@ class GameState
                     p.Hp,
                     p.MaxHp,
                     p.IsAlive,
+                    GetRoleNameForViewer(p, viewer),
+                    IsRoleRevealed(p, viewer),
                     p.Character.Name,
                     p.Character.Description,
                     p.Character.PortraitPath))
@@ -332,6 +385,8 @@ class GameState
                 Started,
                 currentId,
                 currentName,
+                GameOver,
+                WinnerMessage,
                 players,
                 hand,
                 LastEvent);
@@ -350,9 +405,19 @@ class GameState
             return;
         }
 
-        _turnIndex = (_turnIndex + 1) % _turnOrder.Count;
-        var current = _players[_turnOrder[_turnIndex]];
-        DrawCards(current, GetStartTurnDrawCount(current));
+        for (var i = 0; i < _turnOrder.Count; i++)
+        {
+            _turnIndex = (_turnIndex + 1) % _turnOrder.Count;
+            var current = _players[_turnOrder[_turnIndex]];
+            if (!current.IsAlive)
+            {
+                continue;
+            }
+
+            current.ResetTurnFlags();
+            DrawCards(current, GetStartTurnDrawCount(current));
+            return;
+        }
     }
 
     private int GetStartTurnDrawCount(PlayerState player)
@@ -427,13 +492,8 @@ class GameState
         _discardPile.Clear();
     }
 
-    private string ResolveBang(PlayerState attacker, string? targetId)
+    private string ResolveBang(PlayerState attacker, PlayerState target)
     {
-        if (!TryGetTarget(targetId, out var target, out var error))
-        {
-            return error;
-        }
-
         var damage = attacker.Character.Ability == CharacterAbility.DoubleBangDamage ? 2 : 1;
         ApplyDamage(attacker, target, damage, "shot");
         return FormatAttackMessage(attacker, target, "shot", damage);
@@ -471,13 +531,8 @@ class GameState
         return $"{player.Name} plays Stagecoach and draws 2 cards.";
     }
 
-    private string ResolveCatBalou(PlayerState attacker, string? targetId)
+    private string ResolveCatBalou(PlayerState attacker, PlayerState target)
     {
-        if (!TryGetTarget(targetId, out var target, out var error))
-        {
-            return error;
-        }
-
         if (target.Hand.Count == 0)
         {
             return $"{target.Name} has no cards to discard.";
@@ -505,24 +560,14 @@ class GameState
         return $"{attacker.Name} plays Indians! Everyone else takes 1 damage.";
     }
 
-    private string ResolveDuel(PlayerState attacker, string? targetId)
+    private string ResolveDuel(PlayerState attacker, PlayerState target)
     {
-        if (!TryGetTarget(targetId, out var target, out var error))
-        {
-            return error;
-        }
-
         ApplyDamage(attacker, target, 1, "dueled");
         return $"{attacker.Name} challenges {target.Name} to a duel. {target.Name} takes 1 damage.";
     }
 
-    private string ResolvePanic(PlayerState attacker, string? targetId)
+    private string ResolvePanic(PlayerState attacker, PlayerState target)
     {
-        if (!TryGetTarget(targetId, out var target, out var error))
-        {
-            return error;
-        }
-
         if (target.Hand.Count == 0)
         {
             return $"{target.Name} has no cards to steal.";
@@ -587,6 +632,8 @@ class GameState
         if (target.Hp <= 0)
         {
             target.IsAlive = false;
+            RemoveFromTurnOrder(target.Id);
+            CheckForGameOver();
         }
 
         if (target.Character.Ability == CharacterAbility.DrawOnHit && target.IsAlive)
@@ -619,6 +666,118 @@ class GameState
                 definition.ImagePath);
         }
     }
+
+    private void AssignRoles()
+    {
+        var roles = BuildRoleDeck(_players.Count);
+        var shuffledPlayers = _players.Values.OrderBy(_ => _random.Next()).ToList();
+        for (var i = 0; i < shuffledPlayers.Count; i++)
+        {
+            shuffledPlayers[i].AssignRole(roles[i]);
+        }
+
+        var sheriff = shuffledPlayers.FirstOrDefault(p => p.Role == Role.Sheriff);
+        if (sheriff != null)
+        {
+            LastEvent = $"{sheriff.Name} is the Sheriff.";
+        }
+    }
+
+    private List<Role> BuildRoleDeck(int playerCount)
+    {
+        return playerCount switch
+        {
+            2 => new List<Role> { Role.Sheriff, Role.Bandit },
+            3 => new List<Role> { Role.Sheriff, Role.Bandit, Role.Renegade },
+            4 => new List<Role> { Role.Sheriff, Role.Bandit, Role.Bandit, Role.Renegade },
+            5 => new List<Role> { Role.Sheriff, Role.Bandit, Role.Bandit, Role.Deputy, Role.Renegade },
+            _ => new List<Role> { Role.Sheriff, Role.Bandit, Role.Bandit, Role.Bandit, Role.Deputy, Role.Renegade }
+        };
+    }
+
+    private void RemoveFromTurnOrder(string playerId)
+    {
+        var index = _turnOrder.IndexOf(playerId);
+        if (index == -1)
+        {
+            return;
+        }
+
+        _turnOrder.RemoveAt(index);
+        if (_turnOrder.Count == 0)
+        {
+            _turnIndex = 0;
+            return;
+        }
+
+        if (index < _turnIndex)
+        {
+            _turnIndex -= 1;
+        }
+
+        if (_turnIndex >= _turnOrder.Count)
+        {
+            _turnIndex = 0;
+        }
+    }
+
+    private void CheckForGameOver()
+    {
+        if (GameOver)
+        {
+            return;
+        }
+
+        var alivePlayers = _players.Values.Where(p => p.IsAlive).ToList();
+        var sheriffAlive = alivePlayers.Any(p => p.Role == Role.Sheriff);
+        var banditsAlive = alivePlayers.Any(p => p.Role == Role.Bandit);
+        var renegadeAlive = alivePlayers.Any(p => p.Role == Role.Renegade);
+
+        if (!sheriffAlive)
+        {
+            if (alivePlayers.Count == 1 && renegadeAlive)
+            {
+                GameOver = true;
+                WinnerMessage = "Renegade wins by being the last player standing!";
+                LastEvent = WinnerMessage;
+                return;
+            }
+
+            GameOver = true;
+            WinnerMessage = banditsAlive
+                ? "Bandits win by taking down the Sheriff!"
+                : "Bandits win after the Sheriff falls.";
+            LastEvent = WinnerMessage;
+            return;
+        }
+
+        if (!banditsAlive && !renegadeAlive)
+        {
+            GameOver = true;
+            WinnerMessage = "Sheriff and Deputies win by clearing the outlaws!";
+            LastEvent = WinnerMessage;
+        }
+    }
+
+    private bool IsRoleRevealed(PlayerState player, PlayerState viewer)
+    {
+        if (player.Role == Role.Sheriff)
+        {
+            return true;
+        }
+
+        if (!player.IsAlive || GameOver)
+        {
+            return true;
+        }
+
+        return player.Id == viewer.Id;
+    }
+
+    private string GetRoleNameForViewer(PlayerState player, PlayerState viewer)
+    {
+        return IsRoleRevealed(player, viewer) ? player.Role.ToString() : "Unknown";
+    }
 }
 
 class PlayerState
@@ -628,6 +787,7 @@ class PlayerState
         Id = id;
         Name = name;
         Character = character;
+        Role = Role.Unassigned;
         MaxHp = character.MaxHp;
         Hp = MaxHp;
     }
@@ -637,15 +797,28 @@ class PlayerState
     public int Hp { get; set; }
     public int MaxHp { get; private set; }
     public bool IsAlive { get; set; } = true;
+    public Role Role { get; private set; }
     public CharacterDefinition Character { get; private set; }
     public List<Card> Hand { get; } = new();
+    public int BangsPlayedThisTurn { get; set; }
 
     public void ResetForNewGame()
     {
-        MaxHp = Character.MaxHp;
+        MaxHp = Character.MaxHp + (Role == Role.Sheriff ? 1 : 0);
         Hp = MaxHp;
         IsAlive = true;
         Hand.Clear();
+        BangsPlayedThisTurn = 0;
+    }
+
+    public void ResetTurnFlags()
+    {
+        BangsPlayedThisTurn = 0;
+    }
+
+    public void AssignRole(Role role)
+    {
+        Role = role;
     }
 }
 
@@ -666,6 +839,15 @@ enum CardType
     Saloon,
     WellsFargo,
     GeneralStore
+}
+
+enum Role
+{
+    Unassigned,
+    Sheriff,
+    Deputy,
+    Bandit,
+    Renegade
 }
 
 static class CardLibrary
