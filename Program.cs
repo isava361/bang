@@ -10,6 +10,10 @@ builder.Services.AddSingleton<GameState>();
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+{
+    app.Urls.Add("http://0.0.0.0:5000");
+}
 
 app.MapPost("/api/join", (JoinRequest request, GameState game) =>
 {
@@ -108,7 +112,8 @@ record PlayerView(
     int MaxHp,
     bool IsAlive,
     string CharacterName,
-    string CharacterDescription
+    string CharacterDescription,
+    string CharacterPortrait
 );
 
 record CardView(
@@ -116,7 +121,8 @@ record CardView(
     CardType Type,
     string Description,
     bool RequiresTarget,
-    string? TargetHint
+    string? TargetHint,
+    string ImagePath
 );
 
 record CommandResult(bool Success, string Message, GameStateView? State = null, string? PlayerId = null);
@@ -313,12 +319,13 @@ class GameState
                     p.MaxHp,
                     p.IsAlive,
                     p.Character.Name,
-                    p.Character.Description))
+                    p.Character.Description,
+                    p.Character.PortraitPath))
                 .OrderBy(p => p.Name)
                 .ToList();
 
             var hand = viewer.Hand
-                .Select(c => new CardView(c.Name, c.Type, c.Description, c.RequiresTarget, c.TargetHint))
+                .Select(c => new CardView(c.Name, c.Type, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath))
                 .ToList();
 
             return new GameStateView(
@@ -603,7 +610,13 @@ class GameState
         var definition = CardLibrary.Get(type);
         for (var i = 0; i < count; i++)
         {
-            yield return new Card(definition.Name, definition.Type, definition.Description, definition.RequiresTarget, definition.TargetHint);
+            yield return new Card(
+                definition.Name,
+                definition.Type,
+                definition.Description,
+                definition.RequiresTarget,
+                definition.TargetHint,
+                definition.ImagePath);
         }
     }
 }
@@ -636,9 +649,9 @@ class PlayerState
     }
 }
 
-record Card(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint);
+record Card(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
 
-record CardDefinition(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint);
+record CardDefinition(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
 
 enum CardType
 {
@@ -661,47 +674,47 @@ static class CardLibrary
     {
         {
             CardType.Bang,
-            new CardDefinition("Bang!", CardType.Bang, "Deal 1 damage to a target (2 if you are Slab the Killer).", true, "Choose a player to shoot")
+            new CardDefinition("Bang!", CardType.Bang, "Deal 1 damage to a target (2 if you are Slab the Killer).", true, "Choose a player to shoot", "/assets/cards/bang.png")
         },
         {
             CardType.Beer,
-            new CardDefinition("Beer", CardType.Beer, "Recover 1 HP.", false, null)
+            new CardDefinition("Beer", CardType.Beer, "Recover 1 HP.", false, null, "/assets/cards/beer.png")
         },
         {
             CardType.Gatling,
-            new CardDefinition("Gatling", CardType.Gatling, "Deal 1 damage to every other player.", false, null)
+            new CardDefinition("Gatling", CardType.Gatling, "Deal 1 damage to every other player.", false, null, "/assets/cards/gatling.png")
         },
         {
             CardType.Stagecoach,
-            new CardDefinition("Stagecoach", CardType.Stagecoach, "Draw 2 cards.", false, null)
+            new CardDefinition("Stagecoach", CardType.Stagecoach, "Draw 2 cards.", false, null, "/assets/cards/stagecoach.png")
         },
         {
             CardType.CatBalou,
-            new CardDefinition("Cat Balou", CardType.CatBalou, "Force a target to discard a random card.", true, "Pick a player to discard")
+            new CardDefinition("Cat Balou", CardType.CatBalou, "Force a target to discard a random card.", true, "Pick a player to discard", "/assets/cards/cat_balou.png")
         },
         {
             CardType.Indians,
-            new CardDefinition("Indians!", CardType.Indians, "Deal 1 damage to every other player.", false, null)
+            new CardDefinition("Indians!", CardType.Indians, "Deal 1 damage to every other player.", false, null, "/assets/cards/indians.png")
         },
         {
             CardType.Duel,
-            new CardDefinition("Duel", CardType.Duel, "Target player takes 1 damage.", true, "Pick a dueling opponent")
+            new CardDefinition("Duel", CardType.Duel, "Target player takes 1 damage.", true, "Pick a dueling opponent", "/assets/cards/duel.png")
         },
         {
             CardType.Panic,
-            new CardDefinition("Panic!", CardType.Panic, "Steal a random card from a target.", true, "Pick a player to rob")
+            new CardDefinition("Panic!", CardType.Panic, "Steal a random card from a target.", true, "Pick a player to rob", "/assets/cards/panic.png")
         },
         {
             CardType.Saloon,
-            new CardDefinition("Saloon", CardType.Saloon, "All living players heal 1 HP.", false, null)
+            new CardDefinition("Saloon", CardType.Saloon, "All living players heal 1 HP.", false, null, "/assets/cards/saloon.png")
         },
         {
             CardType.WellsFargo,
-            new CardDefinition("Wells Fargo", CardType.WellsFargo, "Draw 3 cards.", false, null)
+            new CardDefinition("Wells Fargo", CardType.WellsFargo, "Draw 3 cards.", false, null, "/assets/cards/wells_fargo.png")
         },
         {
             CardType.GeneralStore,
-            new CardDefinition("General Store", CardType.GeneralStore, "Draw 2 cards.", false, null)
+            new CardDefinition("General Store", CardType.GeneralStore, "Draw 2 cards.", false, null, "/assets/cards/general_store.png")
         }
     };
 
@@ -717,7 +730,7 @@ enum CharacterAbility
     SteadyHands
 }
 
-record CharacterDefinition(string Name, int MaxHp, CharacterAbility Ability, string Description);
+record CharacterDefinition(string Name, int MaxHp, CharacterAbility Ability, string Description, string PortraitPath);
 
 static class CharacterLibrary
 {
@@ -727,72 +740,86 @@ static class CharacterLibrary
             "Lucky Duke",
             4,
             CharacterAbility.ExtraDraw,
-            "Start each turn by drawing 3 cards instead of 2."),
+            "Start each turn by drawing 3 cards instead of 2.",
+            "/assets/characters/lucky_duke.png"),
         new CharacterDefinition(
             "Slab the Killer",
             4,
             CharacterAbility.DoubleBangDamage,
-            "Your Bang! cards deal 2 damage."),
+            "Your Bang! cards deal 2 damage.",
+            "/assets/characters/slab_the_killer.png"),
         new CharacterDefinition(
             "El Gringo",
             3,
             CharacterAbility.DrawOnHit,
-            "Whenever you are hit, draw 1 card."),
+            "Whenever you are hit, draw 1 card.",
+            "/assets/characters/el_gringo.png"),
         new CharacterDefinition(
             "Suzy Lafayette",
             4,
             CharacterAbility.DrawWhenEmpty,
-            "When you end your turn with no cards, draw 1."),
+            "When you end your turn with no cards, draw 1.",
+            "/assets/characters/suzy_lafayette.png"),
         new CharacterDefinition(
             "Rose Doolan",
             5,
             CharacterAbility.SteadyHands,
-            "Steady aim gives you +1 max HP."),
+            "Steady aim gives you +1 max HP.",
+            "/assets/characters/rose_doolan.png"),
         new CharacterDefinition(
             "Jesse Jones",
             4,
             CharacterAbility.ExtraDraw,
-            "Always ready: draw 3 cards at the start of your turn."),
+            "Always ready: draw 3 cards at the start of your turn.",
+            "/assets/characters/jesse_jones.png"),
         new CharacterDefinition(
             "Bart Cassidy",
             4,
             CharacterAbility.DrawOnHit,
-            "Every time you take damage, draw 1 card."),
+            "Every time you take damage, draw 1 card.",
+            "/assets/characters/bart_cassidy.png"),
         new CharacterDefinition(
             "Paul Regret",
             5,
             CharacterAbility.SteadyHands,
-            "Tougher than he looks: +1 max HP."),
+            "Tougher than he looks: +1 max HP.",
+            "/assets/characters/paul_regret.png"),
         new CharacterDefinition(
             "Calamity Janet",
             4,
             CharacterAbility.DrawWhenEmpty,
-            "Lives on the edge: draw 1 when your hand empties."),
+            "Lives on the edge: draw 1 when your hand empties.",
+            "/assets/characters/calamity_janet.png"),
         new CharacterDefinition(
             "Kit Carlson",
             4,
             CharacterAbility.ExtraDraw,
-            "Scout the trail: draw 3 cards at turn start."),
+            "Scout the trail: draw 3 cards at turn start.",
+            "/assets/characters/kit_carlson.png"),
         new CharacterDefinition(
             "Willy the Kid",
             4,
             CharacterAbility.DoubleBangDamage,
-            "Fastest gun: Bang! deals 2 damage."),
+            "Fastest gun: Bang! deals 2 damage.",
+            "/assets/characters/willy_the_kid.png"),
         new CharacterDefinition(
             "Sid Ketchum",
             4,
             CharacterAbility.DrawOnHit,
-            "Pain fuels you: draw 1 card when hit."),
+            "Pain fuels you: draw 1 card when hit.",
+            "/assets/characters/sid_ketchum.png"),
         new CharacterDefinition(
             "Vulture Sam",
             4,
             CharacterAbility.ExtraDraw,
-            "Always prepared: draw 3 cards at the start of your turn."),
+            "Always prepared: draw 3 cards at the start of your turn.",
+            "/assets/characters/vulture_sam.png"),
         new CharacterDefinition(
             "Pedro Ramirez",
             5,
             CharacterAbility.SteadyHands,
-            "Hardy ranger: +1 max HP.")
+            "Hardy ranger: +1 max HP.",
+            "/assets/characters/pedro_ramirez.png")
     };
 
     public static CharacterDefinition Draw(Random random)

@@ -8,7 +8,17 @@ This project now hosts a lightweight web UI for the Bang! prototype.
 dotnet run
 ```
 
-Then open `http://localhost:5000` (or the port shown in the console output).
+Then open `http://localhost:5000`.
+
+### Play From Different Locations
+
+Run the server so it listens on all interfaces, then share your public or LAN IP:
+
+```bash
+dotnet run --urls http://0.0.0.0:5000
+```
+
+Players can join using `http://<host-ip>:5000` from their own browsers.
 
 ## Web UI Flow
 
