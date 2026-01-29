@@ -257,6 +257,10 @@ button:disabled {
   z-index: 10;
 }
 
+.overlay.hidden {
+  display: none;
+}
+
 .overlay-card {
   background: #1b1b24;
   padding: 1.5rem;
