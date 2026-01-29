@@ -1,42 +1,22 @@
 # Bang Online — Launch Guide
 
-This project ships as a single console executable. One player hosts a room, and up to five others join via IP/port.
+This project now hosts a lightweight web UI for the Bang! prototype.
 
-## Build the .exe (Windows)
+## Run Locally
 
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained true
+dotnet run
 ```
 
-The executable will be created at:
+Then open `http://localhost:5000` (or the port shown in the console output).
 
-```
-bin/Release/net8.0/win-x64/publish/BangOnline.exe
-```
+## Web UI Flow
 
-## Host a Room
-
-1. Launch `BangOnline.exe`.
-2. Choose **Host room**.
-3. Enter your display name and port (default: 5151).
-4. Share your IP address and port with other players.
-5. Once at least 2 players have joined, type `/start` to begin.
-
-## Join a Room
-
-1. Launch `BangOnline.exe`.
-2. Choose **Join room**.
-3. Enter the host IP address and port.
-4. Enter your display name.
-
-## In-Game Commands
-
-- `/help` — Show command list.
-- `/say <message>` — Send chat.
-- `/state` — Refresh game state.
-- `/play <index> [targetId]` — Play a card from your hand (targets required for Bang!/Cat Balou).
-- `/end` — End your turn.
-- `/quit` — Leave the room.
+1. Enter a display name and join the table.
+2. Have at least two players join (use multiple browsers or tabs).
+3. Click **Start Game** to deal cards.
+4. Click a card in your hand to play it. If a target is required, select a player.
+5. Click **End Turn** to advance.
 
 ## Notes
 
