@@ -145,7 +145,7 @@ const charactersReference = [
   },
   {
     name: "Willy the Kid",
-    description: "Bang! deals 2 damage.",
+    description: "You can play 2 Bang! cards each turn.",
     portraitPath: "/assets/characters/willy_the_kid.png",
   },
   {
@@ -258,6 +258,15 @@ const updateState = (state) => {
   state.yourHand.forEach((card, index) => {
     const element = document.createElement("div");
     element.className = "card";
+    if (
+      card.type === "Bang" &&
+      state.started &&
+      !state.gameOver &&
+      state.currentPlayerId === playerId &&
+      state.bangsPlayedThisTurn >= state.bangLimit
+    ) {
+      element.dataset.tooltip = `You can only play ${state.bangLimit} Bang! each turn.`;
+    }
     const imageHtml = card.imagePath
       ? `<img class="card-image" src="${card.imagePath}" alt="${card.name}" onerror="this.style.display='none'"/>`
       : "";
@@ -272,7 +281,7 @@ const updateState = (state) => {
         ${card.requiresTarget ? "<span class=\"tag\">Target</span>" : ""}
       </div>
     `;
-    element.addEventListener("click", () => onCardSelected(card, index));
+    element.addEventListener("click", () => onCardSelected(card, index, element));
     handCards.appendChild(element);
   });
 
@@ -324,7 +333,7 @@ const hideTargetOverlay = () => {
   targetOverlay.classList.add("hidden");
 };
 
-const onCardSelected = (card, index) => {
+const onCardSelected = (card, index, element) => {
   if (!currentState || !playerId) {
     return;
   }
@@ -339,11 +348,31 @@ const onCardSelected = (card, index) => {
     return;
   }
 
+  if (card.type === "Bang" && currentState.bangsPlayedThisTurn >= currentState.bangLimit) {
+    showCardTooltip(element, `You can only play ${currentState.bangLimit} Bang! each turn.`);
+    return;
+  }
+
   if (card.requiresTarget) {
     showTargetOverlay(card, index);
   } else {
     playCard(index, null);
   }
+};
+
+const showCardTooltip = (element, message) => {
+  if (!element) {
+    return;
+  }
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "card-tooltip";
+  tooltip.textContent = message;
+  element.appendChild(tooltip);
+
+  setTimeout(() => {
+    tooltip.remove();
+  }, 2000);
 };
 
 const apiPost = async (url, body) => {

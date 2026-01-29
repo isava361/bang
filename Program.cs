@@ -104,6 +104,8 @@ record GameStateView(
     string? WinnerMessage,
     List<PlayerView> Players,
     List<CardView> YourHand,
+    int BangsPlayedThisTurn,
+    int BangLimit,
     string? LastEvent
 );
 
@@ -181,7 +183,7 @@ class GameState
                 return new CommandResult(false, "Unknown player.");
             }
 
-            if (Started)
+            if (Started && !GameOver)
             {
                 return new CommandResult(false, "Game already started.");
             }
@@ -191,6 +193,8 @@ class GameState
                 return new CommandResult(false, "Need at least 2 players to start.");
             }
 
+            _turnOrder.Clear();
+            _turnOrder.AddRange(_players.Values.OrderBy(p => p.Name).Select(p => p.Id));
             Started = true;
             GameOver = false;
             WinnerMessage = null;
@@ -249,9 +253,10 @@ class GameState
             }
 
             var card = player.Hand[index];
-            if (card.Type == CardType.Bang && player.BangsPlayedThisTurn >= 1)
+            if (card.Type == CardType.Bang && player.BangsPlayedThisTurn >= GetBangLimit(player))
             {
-                return new CommandResult(false, "You can only play one Bang! each turn.");
+                var limit = GetBangLimit(player);
+                return new CommandResult(false, $"You can only play {limit} Bang! each turn.");
             }
 
             PlayerState? target = null;
@@ -389,6 +394,8 @@ class GameState
                 WinnerMessage,
                 players,
                 hand,
+                viewer.BangsPlayedThisTurn,
+                GetBangLimit(viewer),
                 LastEvent);
         }
     }
@@ -423,6 +430,11 @@ class GameState
     private int GetStartTurnDrawCount(PlayerState player)
     {
         return player.Character.Ability == CharacterAbility.ExtraDraw ? 3 : 2;
+    }
+
+    private int GetBangLimit(PlayerState player)
+    {
+        return player.Character.Ability == CharacterAbility.ExtraBang ? 2 : 1;
     }
 
     private void BuildDeck()
@@ -761,17 +773,7 @@ class GameState
 
     private bool IsRoleRevealed(PlayerState player, PlayerState viewer)
     {
-        if (player.Role == Role.Sheriff)
-        {
-            return true;
-        }
-
-        if (!player.IsAlive || GameOver)
-        {
-            return true;
-        }
-
-        return player.Id == viewer.Id;
+        return player.Role == Role.Sheriff;
     }
 
     private string GetRoleNameForViewer(PlayerState player, PlayerState viewer)
@@ -909,7 +911,8 @@ enum CharacterAbility
     DoubleBangDamage,
     DrawOnHit,
     DrawWhenEmpty,
-    SteadyHands
+    SteadyHands,
+    ExtraBang
 }
 
 record CharacterDefinition(string Name, int MaxHp, CharacterAbility Ability, string Description, string PortraitPath);
@@ -981,8 +984,8 @@ static class CharacterLibrary
         new CharacterDefinition(
             "Willy the Kid",
             4,
-            CharacterAbility.DoubleBangDamage,
-            "Fastest gun: Bang! deals 2 damage.",
+            CharacterAbility.ExtraBang,
+            "Fastest gun: you can play 2 Bang! cards each turn.",
             "/assets/characters/willy_the_kid.png"),
         new CharacterDefinition(
             "Sid Ketchum",
