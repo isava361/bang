@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bang! Online Prototype</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div>
+      <h1>Bang! Online</h1>
+      <p class="subtitle">Web prototype — draw, click, and play from your hand</p>
+    </div>
+    <div class="status" id="connectionStatus">Disconnected</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel" id="joinPanel">
+      <h2>Join the posse</h2>
+      <p>Enter a display name to create or rejoin a table.</p>
+      <label class="stack">
+        Name
+        <input id="playerName" type="text" placeholder="Lucky Duke" />
+      </label>
+      <button id="joinButton" class="primary">Join Game</button>
+      <p class="hint">Once at least two players join, start the round.</p>
+    </section>
+
+    <section class="panel hidden" id="gamePanel">
+      <div class="panel-row">
+        <div>
+          <h2>Table</h2>
+          <p id="turnInfo">Waiting for players…</p>
+        </div>
+        <div class="actions">
+          <button id="startButton">Start Game</button>
+          <button id="endTurnButton">End Turn</button>
+        </div>
+      </div>
+
+      <div class="players" id="players"></div>
+
+      <div class="hand">
+        <div class="hand-header">
+          <h3>Your Hand</h3>
+          <p id="handHint">Click a card to play it.</p>
+        </div>
+        <div class="hand-cards" id="handCards"></div>
+      </div>
+
+      <div class="event-log">
+        <h3>Last Event</h3>
+        <p id="lastEvent">No events yet.</p>
+      </div>
+
+      <div class="chat">
+        <h3>Quick Chat</h3>
+        <div class="chat-row">
+          <input id="chatInput" type="text" placeholder="Say something…" />
+          <button id="chatButton">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel library">
+      <h2>Card Library</h2>
+      <div id="cardLibrary" class="library-grid"></div>
+      <h2>Characters</h2>
+      <div id="characterLibrary" class="library-grid"></div>
+    </aside>
+  </main>
+
+  <div class="overlay hidden" id="targetOverlay">
+    <div class="overlay-card">
+      <h3>Select a target</h3>
+      <p id="targetPrompt">Choose who this card should affect.</p>
+      <div class="target-list" id="targetList"></div>
+      <button id="cancelTarget" class="secondary">Cancel</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

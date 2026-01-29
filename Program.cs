@@ -1,665 +1,349 @@
-using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Text.Json;
+using System.Text.Json.Serialization;
 
-const int MaxPlayers = 6;
-const int StartingHp = 4;
-
-Console.OutputEncoding = Encoding.UTF8;
-
-Console.WriteLine("Bang Online (Console Edition)");
-Console.WriteLine("1) Host room");
-Console.WriteLine("2) Join room");
-Console.Write("Select option: ");
-var choice = Console.ReadLine();
-
-if (choice == "1")
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
 {
-    await HostRoomAsync();
-}
-else if (choice == "2")
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+builder.Services.AddSingleton<GameState>();
+
+var app = builder.Build();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
-    await JoinRoomAsync();
-}
-else
-{
-    Console.WriteLine("Invalid selection.");
+    app.Urls.Add("http://0.0.0.0:5000");
 }
 
-static async Task HostRoomAsync()
+app.MapPost("/api/join", (JoinRequest request, GameState game) =>
 {
-    Console.Write("Enter your display name: ");
-    var hostName = Console.ReadLine()?.Trim();
-    if (string.IsNullOrWhiteSpace(hostName))
+    if (string.IsNullOrWhiteSpace(request.Name))
     {
-        Console.WriteLine("Name is required.");
-        return;
+        return Results.BadRequest(new ApiResponse(null, "Name is required."));
     }
 
-    Console.Write("Port to host on (default 5151): ");
-    var portInput = Console.ReadLine();
-    var port = 5151;
-    if (!string.IsNullOrWhiteSpace(portInput) && int.TryParse(portInput, out var parsedPort))
+    var result = game.TryAddPlayer(request.Name.Trim());
+    if (!result.Success)
     {
-        port = parsedPort;
+        return Results.BadRequest(new ApiResponse(null, result.Message));
     }
 
-    var server = new BangServer(IPAddress.Any, port);
-    var serverTask = server.StartAsync();
+    var state = game.ToView(result.PlayerId!);
+    return Results.Ok(new ApiResponse(new JoinResponse(result.PlayerId!, state), result.Message));
+});
 
-    Console.WriteLine($"Hosting room on port {port}. Waiting for players (max {MaxPlayers})...");
-
-    using var client = new BangClient("127.0.0.1", port, hostName);
-    await client.ConnectAsync();
-
-    await RunClientLoopAsync(client, isHost: true);
-
-    await server.StopAsync();
-    await serverTask;
-}
-
-static async Task JoinRoomAsync()
+app.MapPost("/api/start", (PlayerRequest request, GameState game) =>
 {
-    Console.Write("Enter server IP: ");
-    var ip = Console.ReadLine()?.Trim();
-    if (string.IsNullOrWhiteSpace(ip))
+    var result = game.StartGame(request.PlayerId);
+    if (!result.Success)
     {
-        Console.WriteLine("Server IP is required.");
-        return;
+        return Results.BadRequest(new ApiResponse(null, result.Message));
     }
 
-    Console.Write("Enter server port (default 5151): ");
-    var portInput = Console.ReadLine();
-    var port = 5151;
-    if (!string.IsNullOrWhiteSpace(portInput) && int.TryParse(portInput, out var parsedPort))
-    {
-        port = parsedPort;
-    }
+    return Results.Ok(new ApiResponse(result.State, result.Message));
+});
 
-    Console.Write("Enter your display name: ");
-    var name = Console.ReadLine()?.Trim();
-    if (string.IsNullOrWhiteSpace(name))
-    {
-        Console.WriteLine("Name is required.");
-        return;
-    }
-
-    using var client = new BangClient(ip, port, name);
-    await client.ConnectAsync();
-
-    await RunClientLoopAsync(client, isHost: false);
-}
-
-static async Task RunClientLoopAsync(BangClient client, bool isHost)
+app.MapPost("/api/play", (PlayRequest request, GameState game) =>
 {
-    Console.WriteLine("Connected. Type /help for commands.");
-
-    var receiveTask = Task.Run(async () =>
+    var result = game.PlayCard(request.PlayerId, request.CardIndex, request.TargetId);
+    if (!result.Success)
     {
-        await foreach (var message in client.ReceiveAsync())
-        {
-            switch (message.Type)
-            {
-                case MessageType.System:
-                    Console.WriteLine($"[System] {message.Text}");
-                    break;
-                case MessageType.Chat:
-                    Console.WriteLine($"[{message.From}] {message.Text}");
-                    break;
-                case MessageType.State:
-                    RenderState(message.State);
-                    break;
-            }
-        }
-    });
-
-    while (true)
-    {
-        var input = Console.ReadLine();
-        if (input is null)
-        {
-            continue;
-        }
-
-        if (input.Equals("/quit", StringComparison.OrdinalIgnoreCase))
-        {
-            await client.SendAsync(new ClientCommand(CommandType.Leave));
-            break;
-        }
-
-        if (input.Equals("/help", StringComparison.OrdinalIgnoreCase))
-        {
-            PrintHelp(isHost);
-            continue;
-        }
-
-        if (isHost && input.Equals("/start", StringComparison.OrdinalIgnoreCase))
-        {
-            await client.SendAsync(new ClientCommand(CommandType.Start));
-            continue;
-        }
-
-        if (input.StartsWith("/say ", StringComparison.OrdinalIgnoreCase))
-        {
-            var text = input[5..].Trim();
-            if (text.Length > 0)
-            {
-                await client.SendAsync(new ClientCommand(CommandType.Chat, text));
-            }
-            continue;
-        }
-
-        if (input.Equals("/state", StringComparison.OrdinalIgnoreCase))
-        {
-            await client.SendAsync(new ClientCommand(CommandType.State));
-            continue;
-        }
-
-        if (input.StartsWith("/play ", StringComparison.OrdinalIgnoreCase))
-        {
-            var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2 && int.TryParse(parts[1], out var cardIndex))
-            {
-                string? target = parts.Length >= 3 ? parts[2] : null;
-                await client.SendAsync(new ClientCommand(CommandType.Play, cardIndex.ToString(), target));
-            }
-            else
-            {
-                Console.WriteLine("Usage: /play <cardIndex> [targetId]");
-            }
-            continue;
-        }
-
-        if (input.Equals("/end", StringComparison.OrdinalIgnoreCase))
-        {
-            await client.SendAsync(new ClientCommand(CommandType.End));
-            continue;
-        }
-
-        Console.WriteLine("Unknown command. Type /help for usage.");
+        return Results.BadRequest(new ApiResponse(null, result.Message));
     }
 
-    await client.DisconnectAsync();
-    await receiveTask;
-}
+    return Results.Ok(new ApiResponse(result.State, result.Message));
+});
 
-static void PrintHelp(bool isHost)
+app.MapPost("/api/end", (PlayerRequest request, GameState game) =>
 {
-    Console.WriteLine("Commands:");
-    Console.WriteLine("  /help            Show commands");
-    Console.WriteLine("  /say <message>   Send chat message");
-    Console.WriteLine("  /state           Request current game state");
-    Console.WriteLine("  /play <index> [targetId]  Play a card from your hand");
-    Console.WriteLine("  /end             End your turn");
-    Console.WriteLine("  /quit            Leave the room");
-    if (isHost)
+    var result = game.EndTurn(request.PlayerId);
+    if (!result.Success)
     {
-        Console.WriteLine("  /start           Start the game (host only)");
+        return Results.BadRequest(new ApiResponse(null, result.Message));
     }
-}
 
-static void RenderState(GameStateView? state)
+    return Results.Ok(new ApiResponse(result.State, result.Message));
+});
+
+app.MapPost("/api/chat", (ChatRequest request, GameState game) =>
 {
+    var result = game.AddChat(request.PlayerId, request.Text);
+    if (!result.Success)
+    {
+        return Results.BadRequest(new ApiResponse(null, result.Message));
+    }
+
+    return Results.Ok(new ApiResponse(result.State, result.Message));
+});
+
+app.MapGet("/api/state", (string playerId, GameState game) =>
+{
+    var state = game.ToView(playerId);
     if (state is null)
     {
-        return;
+        return Results.BadRequest(new ApiResponse(null, "Unknown player."));
     }
 
-    Console.WriteLine("--- Game State ---");
-    Console.WriteLine($"Turn: {state.CurrentPlayerName} (ID {state.CurrentPlayerId})");
-    Console.WriteLine("Players:");
-    foreach (var player in state.Players)
-    {
-        var status = player.IsAlive ? "Alive" : "Out";
-        Console.WriteLine($"  {player.Name} [ID {player.Id}] HP {player.Hp}/{player.MaxHp} ({status})");
-    }
+    return Results.Ok(new ApiResponse(state, "OK"));
+});
 
-    if (state.YourHand.Count > 0)
-    {
-        Console.WriteLine("Your hand:");
-        for (var i = 0; i < state.YourHand.Count; i++)
-        {
-            Console.WriteLine($"  [{i}] {state.YourHand[i]}");
-        }
-    }
-    else
-    {
-        Console.WriteLine("Your hand is empty.");
-    }
-}
+app.Run();
 
-enum CommandType
-{
-    Join,
-    Leave,
-    Start,
-    Chat,
-    Play,
-    End,
-    State
-}
-
-record ClientCommand(CommandType Type, string? Data = null, string? Target = null);
-
-enum MessageType
-{
-    System,
-    Chat,
-    State
-}
-
-record ServerMessage(MessageType Type, string? Text = null, string? From = null, GameStateView? State = null);
+record JoinRequest(string Name);
+record PlayerRequest(string PlayerId);
+record PlayRequest(string PlayerId, int CardIndex, string? TargetId);
+record ChatRequest(string PlayerId, string Text);
+record JoinResponse(string PlayerId, GameStateView State);
+record ApiResponse(object? Data, string Message);
 
 record GameStateView(
+    bool Started,
     string CurrentPlayerId,
     string CurrentPlayerName,
     List<PlayerView> Players,
-    List<string> YourHand
+    List<CardView> YourHand,
+    string? LastEvent
 );
 
-record PlayerView(string Id, string Name, int Hp, int MaxHp, bool IsAlive);
+record PlayerView(
+    string Id,
+    string Name,
+    int Hp,
+    int MaxHp,
+    bool IsAlive,
+    string CharacterName,
+    string CharacterDescription,
+    string CharacterPortrait
+);
 
-class BangClient : IDisposable
-{
-    private readonly string _host;
-    private readonly int _port;
-    private readonly string _name;
-    private TcpClient? _client;
-    private StreamReader? _reader;
-    private StreamWriter? _writer;
+record CardView(
+    string Name,
+    CardType Type,
+    string Description,
+    bool RequiresTarget,
+    string? TargetHint,
+    string ImagePath
+);
 
-    public BangClient(string host, int port, string name)
-    {
-        _host = host;
-        _port = port;
-        _name = name;
-    }
-
-    public async Task ConnectAsync()
-    {
-        _client = new TcpClient();
-        await _client.ConnectAsync(_host, _port);
-        var stream = _client.GetStream();
-        _reader = new StreamReader(stream, Encoding.UTF8);
-        _writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-
-        await SendAsync(new ClientCommand(CommandType.Join, _name));
-    }
-
-    public async IAsyncEnumerable<ServerMessage> ReceiveAsync()
-    {
-        if (_reader is null)
-        {
-            yield break;
-        }
-
-        while (true)
-        {
-            var line = await _reader.ReadLineAsync();
-            if (line is null)
-            {
-                yield break;
-            }
-
-            var message = JsonSerializer.Deserialize<ServerMessage>(line);
-            if (message is not null)
-            {
-                yield return message;
-            }
-        }
-    }
-
-    public async Task SendAsync(ClientCommand command)
-    {
-        if (_writer is null)
-        {
-            return;
-        }
-
-        var payload = JsonSerializer.Serialize(command);
-        await _writer.WriteLineAsync(payload);
-    }
-
-    public async Task DisconnectAsync()
-    {
-        if (_client is null)
-        {
-            return;
-        }
-
-        _client.Close();
-        _client.Dispose();
-        await Task.CompletedTask;
-    }
-
-    public void Dispose()
-    {
-        _client?.Dispose();
-        _reader?.Dispose();
-        _writer?.Dispose();
-    }
-}
-
-class BangServer
-{
-    private readonly TcpListener _listener;
-    private readonly ConcurrentDictionary<string, ClientConnection> _clients = new();
-    private readonly GameState _gameState = new();
-    private CancellationTokenSource? _cts;
-
-    public BangServer(IPAddress address, int port)
-    {
-        _listener = new TcpListener(address, port);
-    }
-
-    public async Task StartAsync()
-    {
-        _cts = new CancellationTokenSource();
-        _listener.Start();
-        while (!_cts.IsCancellationRequested)
-        {
-            var client = await _listener.AcceptTcpClientAsync();
-            _ = HandleClientAsync(client, _cts.Token);
-        }
-    }
-
-    public async Task StopAsync()
-    {
-        if (_cts is null)
-        {
-            return;
-        }
-
-        _cts.Cancel();
-        _listener.Stop();
-        foreach (var client in _clients.Values)
-        {
-            await client.DisposeAsync();
-        }
-    }
-
-    private async Task HandleClientAsync(TcpClient tcpClient, CancellationToken token)
-    {
-        var connection = new ClientConnection(tcpClient);
-        try
-        {
-            await foreach (var command in connection.ReceiveAsync(token))
-            {
-                switch (command.Type)
-                {
-                    case CommandType.Join:
-                        await HandleJoinAsync(connection, command.Data);
-                        break;
-                    case CommandType.Leave:
-                        await HandleLeaveAsync(connection);
-                        return;
-                    case CommandType.Start:
-                        await HandleStartAsync(connection);
-                        break;
-                    case CommandType.Chat:
-                        await HandleChatAsync(connection, command.Data);
-                        break;
-                    case CommandType.Play:
-                        await HandlePlayAsync(connection, command);
-                        break;
-                    case CommandType.End:
-                        await HandleEndAsync(connection);
-                        break;
-                    case CommandType.State:
-                        await SendStateAsync(connection);
-                        break;
-                }
-            }
-        }
-        finally
-        {
-            await HandleLeaveAsync(connection);
-        }
-    }
-
-    private async Task HandleJoinAsync(ClientConnection connection, string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Name required."));
-            return;
-        }
-
-        if (_clients.Count >= MaxPlayers)
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Room is full."));
-            await connection.DisposeAsync();
-            return;
-        }
-
-        connection.PlayerId = Guid.NewGuid().ToString("N");
-        connection.Name = name.Trim();
-        _clients[connection.PlayerId] = connection;
-
-        _gameState.EnsurePlayer(connection.PlayerId, connection.Name);
-
-        await BroadcastAsync(new ServerMessage(MessageType.System, $"{connection.Name} joined the room."));
-        await BroadcastStateAsync();
-    }
-
-    private async Task HandleLeaveAsync(ClientConnection connection)
-    {
-        if (connection.PlayerId is null)
-        {
-            return;
-        }
-
-        if (_clients.TryRemove(connection.PlayerId, out _))
-        {
-            _gameState.RemovePlayer(connection.PlayerId);
-            await BroadcastAsync(new ServerMessage(MessageType.System, $"{connection.Name} left the room."));
-            await BroadcastStateAsync();
-        }
-
-        await connection.DisposeAsync();
-    }
-
-    private async Task HandleStartAsync(ClientConnection connection)
-    {
-        if (_gameState.Started)
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Game already started."));
-            return;
-        }
-
-        if (_clients.Count < 2)
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Need at least 2 players to start."));
-            return;
-        }
-
-        _gameState.Start();
-        await BroadcastAsync(new ServerMessage(MessageType.System, "Game started!"));
-        await BroadcastStateAsync();
-    }
-
-    private async Task HandleChatAsync(ClientConnection connection, string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        await BroadcastAsync(new ServerMessage(MessageType.Chat, text.Trim(), connection.Name));
-    }
-
-    private async Task HandlePlayAsync(ClientConnection connection, ClientCommand command)
-    {
-        if (!_gameState.Started)
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Game has not started."));
-            return;
-        }
-
-        if (!_gameState.IsPlayersTurn(connection.PlayerId))
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Not your turn."));
-            return;
-        }
-
-        if (!int.TryParse(command.Data, out var index))
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Invalid card index."));
-            return;
-        }
-
-        var result = _gameState.PlayCard(connection.PlayerId, index, command.Target);
-        await BroadcastAsync(new ServerMessage(MessageType.System, result));
-        await BroadcastStateAsync();
-    }
-
-    private async Task HandleEndAsync(ClientConnection connection)
-    {
-        if (!_gameState.Started)
-        {
-            return;
-        }
-
-        if (!_gameState.IsPlayersTurn(connection.PlayerId))
-        {
-            await connection.SendAsync(new ServerMessage(MessageType.System, "Not your turn."));
-            return;
-        }
-
-        _gameState.AdvanceTurn();
-        await BroadcastStateAsync();
-    }
-
-    private async Task SendStateAsync(ClientConnection connection)
-    {
-        var state = _gameState.ToView(connection.PlayerId);
-        await connection.SendAsync(new ServerMessage(MessageType.State, State: state));
-    }
-
-    private async Task BroadcastStateAsync()
-    {
-        foreach (var client in _clients.Values)
-        {
-            await SendStateAsync(client);
-        }
-    }
-
-    private async Task BroadcastAsync(ServerMessage message)
-    {
-        foreach (var client in _clients.Values)
-        {
-            await client.SendAsync(message);
-        }
-    }
-}
-
-class ClientConnection : IAsyncDisposable
-{
-    private readonly TcpClient _client;
-    private readonly StreamReader _reader;
-    private readonly StreamWriter _writer;
-
-    public ClientConnection(TcpClient client)
-    {
-        _client = client;
-        var stream = client.GetStream();
-        _reader = new StreamReader(stream, Encoding.UTF8);
-        _writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-    }
-
-    public string? PlayerId { get; set; }
-    public string Name { get; set; } = "";
-
-    public async IAsyncEnumerable<ClientCommand> ReceiveAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token)
-    {
-        while (!token.IsCancellationRequested)
-        {
-            var line = await _reader.ReadLineAsync();
-            if (line is null)
-            {
-                yield break;
-            }
-
-            var command = JsonSerializer.Deserialize<ClientCommand>(line);
-            if (command is not null)
-            {
-                yield return command;
-            }
-        }
-    }
-
-    public async Task SendAsync(ServerMessage message)
-    {
-        var payload = JsonSerializer.Serialize(message);
-        await _writer.WriteLineAsync(payload);
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        _client.Close();
-        _client.Dispose();
-        _reader.Dispose();
-        _writer.Dispose();
-        return ValueTask.CompletedTask;
-    }
-}
+record CommandResult(bool Success, string Message, GameStateView? State = null, string? PlayerId = null);
 
 class GameState
 {
+    private const int MaxPlayers = 6;
+    private const int StartingHand = 4;
     private readonly Dictionary<string, PlayerState> _players = new();
     private readonly List<string> _turnOrder = new();
     private readonly Random _random = new();
     private readonly Stack<Card> _drawPile = new();
     private readonly List<Card> _discardPile = new();
+    private readonly object _lock = new();
     private int _turnIndex;
 
     public bool Started { get; private set; }
+    public string? LastEvent { get; private set; }
 
-    public void EnsurePlayer(string id, string name)
+    public CommandResult TryAddPlayer(string name)
     {
-        if (_players.ContainsKey(id))
+        lock (_lock)
         {
-            return;
-        }
+            if (Started)
+            {
+                return new CommandResult(false, "Game already started. Wait for the next round.");
+            }
 
-        _players[id] = new PlayerState(id, name, StartingHp);
-        _turnOrder.Add(id);
-    }
+            if (_players.Count >= MaxPlayers)
+            {
+                return new CommandResult(false, "Room is full.");
+            }
 
-    public void RemovePlayer(string id)
-    {
-        if (_players.Remove(id))
-        {
-            _turnOrder.Remove(id);
-        }
-    }
-
-    public void Start()
-    {
-        Started = true;
-        BuildDeck();
-        ShuffleDeck();
-        _turnIndex = 0;
-        foreach (var player in _players.Values)
-        {
-            player.Hand.Clear();
-            DrawCards(player, 4);
-        }
-
-        if (_turnOrder.Count > 0)
-        {
-            DrawCards(_players[_turnOrder[_turnIndex]], 2);
+            var id = Guid.NewGuid().ToString("N");
+            var character = CharacterLibrary.Draw(_random);
+            var player = new PlayerState(id, name, character);
+            _players[id] = player;
+            _turnOrder.Add(id);
+            LastEvent = $"{name} joined as {character.Name}.";
+            return new CommandResult(true, "Joined room.", PlayerId: id);
         }
     }
 
-    public bool IsPlayersTurn(string? playerId)
+    public CommandResult StartGame(string playerId)
     {
-        return playerId != null && _turnOrder.Count > 0 && _turnOrder[_turnIndex] == playerId;
+        lock (_lock)
+        {
+            if (!_players.ContainsKey(playerId))
+            {
+                return new CommandResult(false, "Unknown player.");
+            }
+
+            if (Started)
+            {
+                return new CommandResult(false, "Game already started.");
+            }
+
+            if (_players.Count < 2)
+            {
+                return new CommandResult(false, "Need at least 2 players to start.");
+            }
+
+            Started = true;
+            BuildDeck();
+            ShuffleDeck();
+            _turnIndex = 0;
+
+            foreach (var player in _players.Values)
+            {
+                player.ResetForNewGame();
+                DrawCards(player, StartingHand);
+            }
+
+            var current = _players[_turnOrder[_turnIndex]];
+            DrawCards(current, GetStartTurnDrawCount(current));
+            LastEvent = $"Game started! {current.Name} takes the first turn.";
+
+            return new CommandResult(true, "Game started.", ToView(playerId));
+        }
     }
 
-    public void AdvanceTurn()
+    public CommandResult PlayCard(string playerId, int index, string? targetId)
+    {
+        lock (_lock)
+        {
+            if (!Started)
+            {
+                return new CommandResult(false, "Game has not started.");
+            }
+
+            if (!IsPlayersTurn(playerId))
+            {
+                return new CommandResult(false, "Not your turn.");
+            }
+
+            if (!_players.TryGetValue(playerId, out var player))
+            {
+                return new CommandResult(false, "Unknown player.");
+            }
+
+            if (index < 0 || index >= player.Hand.Count)
+            {
+                return new CommandResult(false, "Card index out of range.");
+            }
+
+            var card = player.Hand[index];
+            player.Hand.RemoveAt(index);
+            _discardPile.Add(card);
+
+            var message = card.Type switch
+            {
+                CardType.Bang => ResolveBang(player, targetId),
+                CardType.Beer => ResolveBeer(player),
+                CardType.Gatling => ResolveGatling(player),
+                CardType.Stagecoach => ResolveStagecoach(player),
+                CardType.CatBalou => ResolveCatBalou(player, targetId),
+                CardType.Indians => ResolveIndians(player),
+                CardType.Duel => ResolveDuel(player, targetId),
+                CardType.Panic => ResolvePanic(player, targetId),
+                CardType.Saloon => ResolveSaloon(player),
+                CardType.WellsFargo => ResolveWellsFargo(player),
+                CardType.GeneralStore => ResolveGeneralStore(player),
+                _ => "Card had no effect."
+            };
+
+            LastEvent = message;
+            return new CommandResult(true, message, ToView(playerId));
+        }
+    }
+
+    public CommandResult EndTurn(string playerId)
+    {
+        lock (_lock)
+        {
+            if (!Started)
+            {
+                return new CommandResult(false, "Game has not started.");
+            }
+
+            if (!IsPlayersTurn(playerId))
+            {
+                return new CommandResult(false, "Not your turn.");
+            }
+
+            var endingPlayer = _players[_turnOrder[_turnIndex]];
+            if (endingPlayer.Character.Ability == CharacterAbility.DrawWhenEmpty && endingPlayer.Hand.Count == 0)
+            {
+                DrawCards(endingPlayer, 1);
+                LastEvent = $"{endingPlayer.Name} refreshes with a bonus draw.";
+            }
+
+            AdvanceTurn();
+            var current = _players[_turnOrder[_turnIndex]];
+            LastEvent = $"{current.Name}'s turn begins.";
+            return new CommandResult(true, "Turn ended.", ToView(playerId));
+        }
+    }
+
+    public CommandResult AddChat(string playerId, string text)
+    {
+        lock (_lock)
+        {
+            if (!_players.TryGetValue(playerId, out var player))
+            {
+                return new CommandResult(false, "Unknown player.");
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return new CommandResult(false, "Chat message cannot be empty.");
+            }
+
+            LastEvent = $"{player.Name}: {text.Trim()}";
+            return new CommandResult(true, "Chat sent.", ToView(playerId));
+        }
+    }
+
+    public GameStateView? ToView(string playerId)
+    {
+        lock (_lock)
+        {
+            if (!_players.TryGetValue(playerId, out var viewer))
+            {
+                return null;
+            }
+
+            var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
+            var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
+            var players = _players.Values
+                .Select(p => new PlayerView(
+                    p.Id,
+                    p.Name,
+                    p.Hp,
+                    p.MaxHp,
+                    p.IsAlive,
+                    p.Character.Name,
+                    p.Character.Description,
+                    p.Character.PortraitPath))
+                .OrderBy(p => p.Name)
+                .ToList();
+
+            var hand = viewer.Hand
+                .Select(c => new CardView(c.Name, c.Type, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath))
+                .ToList();
+
+            return new GameStateView(
+                Started,
+                currentId,
+                currentName,
+                players,
+                hand,
+                LastEvent);
+        }
+    }
+
+    private bool IsPlayersTurn(string playerId)
+    {
+        return _turnOrder.Count > 0 && _turnOrder[_turnIndex] == playerId;
+    }
+
+    private void AdvanceTurn()
     {
         if (_turnOrder.Count == 0)
         {
@@ -668,51 +352,12 @@ class GameState
 
         _turnIndex = (_turnIndex + 1) % _turnOrder.Count;
         var current = _players[_turnOrder[_turnIndex]];
-        DrawCards(current, 2);
+        DrawCards(current, GetStartTurnDrawCount(current));
     }
 
-    public string PlayCard(string playerId, int index, string? targetId)
+    private int GetStartTurnDrawCount(PlayerState player)
     {
-        if (!_players.TryGetValue(playerId, out var player))
-        {
-            return "Unknown player.";
-        }
-
-        if (index < 0 || index >= player.Hand.Count)
-        {
-            return "Card index out of range.";
-        }
-
-        var card = player.Hand[index];
-        player.Hand.RemoveAt(index);
-        _discardPile.Add(card);
-
-        return card.Type switch
-        {
-            CardType.Bang => ResolveBang(player, targetId),
-            CardType.Beer => ResolveBeer(player),
-            CardType.Gatling => ResolveGatling(player),
-            CardType.Stagecoach => ResolveStagecoach(player),
-            CardType.CatBalou => ResolveCatBalou(player, targetId),
-            _ => "Card had no effect."
-        };
-    }
-
-    public GameStateView ToView(string? viewerId)
-    {
-        var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
-        var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
-        var players = _players.Values
-            .Select(p => new PlayerView(p.Id, p.Name, p.Hp, p.MaxHp, p.IsAlive))
-            .ToList();
-
-        var hand = new List<string>();
-        if (viewerId != null && _players.TryGetValue(viewerId, out var viewer))
-        {
-            hand = viewer.Hand.Select(c => c.Name).ToList();
-        }
-
-        return new GameStateView(currentId, currentName, players, hand);
+        return player.Character.Ability == CharacterAbility.ExtraDraw ? 3 : 2;
     }
 
     private void BuildDeck()
@@ -721,11 +366,17 @@ class GameState
         _discardPile.Clear();
 
         var cards = new List<Card>();
-        cards.AddRange(CreateCards("Bang!", CardType.Bang, 25));
-        cards.AddRange(CreateCards("Beer", CardType.Beer, 6));
-        cards.AddRange(CreateCards("Gatling", CardType.Gatling, 2));
-        cards.AddRange(CreateCards("Stagecoach", CardType.Stagecoach, 4));
-        cards.AddRange(CreateCards("Cat Balou", CardType.CatBalou, 4));
+        cards.AddRange(CreateCards(CardType.Bang, 25));
+        cards.AddRange(CreateCards(CardType.Beer, 6));
+        cards.AddRange(CreateCards(CardType.Gatling, 2));
+        cards.AddRange(CreateCards(CardType.Stagecoach, 4));
+        cards.AddRange(CreateCards(CardType.CatBalou, 4));
+        cards.AddRange(CreateCards(CardType.Indians, 2));
+        cards.AddRange(CreateCards(CardType.Duel, 3));
+        cards.AddRange(CreateCards(CardType.Panic, 4));
+        cards.AddRange(CreateCards(CardType.Saloon, 2));
+        cards.AddRange(CreateCards(CardType.WellsFargo, 2));
+        cards.AddRange(CreateCards(CardType.GeneralStore, 3));
 
         foreach (var card in cards.OrderBy(_ => _random.Next()))
         {
@@ -778,24 +429,14 @@ class GameState
 
     private string ResolveBang(PlayerState attacker, string? targetId)
     {
-        if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out var target))
+        if (!TryGetTarget(targetId, out var target, out var error))
         {
-            return "Bang! requires a target ID.";
+            return error;
         }
 
-        if (!target.IsAlive)
-        {
-            return $"{target.Name} is already out.";
-        }
-
-        target.Hp -= 1;
-        if (target.Hp <= 0)
-        {
-            target.IsAlive = false;
-            return $"{attacker.Name} shot {target.Name}. {target.Name} is out!";
-        }
-
-        return $"{attacker.Name} shot {target.Name}.";
+        var damage = attacker.Character.Ability == CharacterAbility.DoubleBangDamage ? 2 : 1;
+        ApplyDamage(attacker, target, damage, "shot");
+        return FormatAttackMessage(attacker, target, "shot", damage);
     }
 
     private string ResolveBeer(PlayerState player)
@@ -805,7 +446,7 @@ class GameState
             return $"{player.Name} is already at full health.";
         }
 
-        player.Hp += 1;
+        player.Hp = Math.Min(player.Hp + 1, player.MaxHp);
         return $"{player.Name} drinks a Beer and recovers 1 HP.";
     }
 
@@ -818,11 +459,7 @@ class GameState
                 continue;
             }
 
-            target.Hp -= 1;
-            if (target.Hp <= 0)
-            {
-                target.IsAlive = false;
-            }
+            ApplyDamage(attacker, target, 1, "riddled");
         }
 
         return $"{attacker.Name} fires Gatling! Everyone else takes 1 damage.";
@@ -836,9 +473,9 @@ class GameState
 
     private string ResolveCatBalou(PlayerState attacker, string? targetId)
     {
-        if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out var target))
+        if (!TryGetTarget(targetId, out var target, out var error))
         {
-            return "Cat Balou requires a target ID.";
+            return error;
         }
 
         if (target.Hand.Count == 0)
@@ -853,34 +490,168 @@ class GameState
         return $"{attacker.Name} uses Cat Balou on {target.Name}, discarding {discarded.Name}.";
     }
 
-    private static IEnumerable<Card> CreateCards(string name, CardType type, int count)
+    private string ResolveIndians(PlayerState attacker)
     {
+        foreach (var target in _players.Values)
+        {
+            if (target.Id == attacker.Id || !target.IsAlive)
+            {
+                continue;
+            }
+
+            ApplyDamage(attacker, target, 1, "ambushed");
+        }
+
+        return $"{attacker.Name} plays Indians! Everyone else takes 1 damage.";
+    }
+
+    private string ResolveDuel(PlayerState attacker, string? targetId)
+    {
+        if (!TryGetTarget(targetId, out var target, out var error))
+        {
+            return error;
+        }
+
+        ApplyDamage(attacker, target, 1, "dueled");
+        return $"{attacker.Name} challenges {target.Name} to a duel. {target.Name} takes 1 damage.";
+    }
+
+    private string ResolvePanic(PlayerState attacker, string? targetId)
+    {
+        if (!TryGetTarget(targetId, out var target, out var error))
+        {
+            return error;
+        }
+
+        if (target.Hand.Count == 0)
+        {
+            return $"{target.Name} has no cards to steal.";
+        }
+
+        var index = _random.Next(target.Hand.Count);
+        var stolen = target.Hand[index];
+        target.Hand.RemoveAt(index);
+        attacker.Hand.Add(stolen);
+        return $"{attacker.Name} uses Panic to steal {stolen.Name} from {target.Name}.";
+    }
+
+    private string ResolveSaloon(PlayerState player)
+    {
+        foreach (var target in _players.Values)
+        {
+            if (!target.IsAlive)
+            {
+                continue;
+            }
+
+            target.Hp = Math.Min(target.Hp + 1, target.MaxHp);
+        }
+
+        return $"{player.Name} opens the Saloon. Everyone heals 1 HP.";
+    }
+
+    private string ResolveWellsFargo(PlayerState player)
+    {
+        DrawCards(player, 3);
+        return $"{player.Name} raids Wells Fargo and draws 3 cards.";
+    }
+
+    private string ResolveGeneralStore(PlayerState player)
+    {
+        DrawCards(player, 2);
+        return $"{player.Name} visits the General Store and draws 2 cards.";
+    }
+
+    private bool TryGetTarget(string? targetId, out PlayerState target, out string error)
+    {
+        if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out target!))
+        {
+            error = "Target player not found.";
+            target = null!;
+            return false;
+        }
+
+        if (!target.IsAlive)
+        {
+            error = $"{target.Name} is already out.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private void ApplyDamage(PlayerState attacker, PlayerState target, int damage, string verb)
+    {
+        target.Hp -= damage;
+        if (target.Hp <= 0)
+        {
+            target.IsAlive = false;
+        }
+
+        if (target.Character.Ability == CharacterAbility.DrawOnHit && target.IsAlive)
+        {
+            DrawCards(target, 1);
+        }
+    }
+
+    private string FormatAttackMessage(PlayerState attacker, PlayerState target, string verb, int damage)
+    {
+        if (!target.IsAlive)
+        {
+            return $"{attacker.Name} {verb} {target.Name} for {damage} damage. {target.Name} is out!";
+        }
+
+        return $"{attacker.Name} {verb} {target.Name} for {damage} damage.";
+    }
+
+    private IEnumerable<Card> CreateCards(CardType type, int count)
+    {
+        var definition = CardLibrary.Get(type);
         for (var i = 0; i < count; i++)
         {
-            yield return new Card(name, type);
+            yield return new Card(
+                definition.Name,
+                definition.Type,
+                definition.Description,
+                definition.RequiresTarget,
+                definition.TargetHint,
+                definition.ImagePath);
         }
     }
 }
 
 class PlayerState
 {
-    public PlayerState(string id, string name, int maxHp)
+    public PlayerState(string id, string name, CharacterDefinition character)
     {
         Id = id;
         Name = name;
-        MaxHp = maxHp;
-        Hp = maxHp;
+        Character = character;
+        MaxHp = character.MaxHp;
+        Hp = MaxHp;
     }
 
     public string Id { get; }
     public string Name { get; }
     public int Hp { get; set; }
-    public int MaxHp { get; }
+    public int MaxHp { get; private set; }
     public bool IsAlive { get; set; } = true;
+    public CharacterDefinition Character { get; private set; }
     public List<Card> Hand { get; } = new();
+
+    public void ResetForNewGame()
+    {
+        MaxHp = Character.MaxHp;
+        Hp = MaxHp;
+        IsAlive = true;
+        Hand.Clear();
+    }
 }
 
-record Card(string Name, CardType Type);
+record Card(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
+
+record CardDefinition(string Name, CardType Type, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
 
 enum CardType
 {
@@ -888,5 +659,171 @@ enum CardType
     Beer,
     Gatling,
     Stagecoach,
-    CatBalou
+    CatBalou,
+    Indians,
+    Duel,
+    Panic,
+    Saloon,
+    WellsFargo,
+    GeneralStore
+}
+
+static class CardLibrary
+{
+    private static readonly Dictionary<CardType, CardDefinition> Definitions = new()
+    {
+        {
+            CardType.Bang,
+            new CardDefinition("Bang!", CardType.Bang, "Deal 1 damage to a target (2 if you are Slab the Killer).", true, "Choose a player to shoot", "/assets/cards/bang.png")
+        },
+        {
+            CardType.Beer,
+            new CardDefinition("Beer", CardType.Beer, "Recover 1 HP.", false, null, "/assets/cards/beer.png")
+        },
+        {
+            CardType.Gatling,
+            new CardDefinition("Gatling", CardType.Gatling, "Deal 1 damage to every other player.", false, null, "/assets/cards/gatling.png")
+        },
+        {
+            CardType.Stagecoach,
+            new CardDefinition("Stagecoach", CardType.Stagecoach, "Draw 2 cards.", false, null, "/assets/cards/stagecoach.png")
+        },
+        {
+            CardType.CatBalou,
+            new CardDefinition("Cat Balou", CardType.CatBalou, "Force a target to discard a random card.", true, "Pick a player to discard", "/assets/cards/cat_balou.png")
+        },
+        {
+            CardType.Indians,
+            new CardDefinition("Indians!", CardType.Indians, "Deal 1 damage to every other player.", false, null, "/assets/cards/indians.png")
+        },
+        {
+            CardType.Duel,
+            new CardDefinition("Duel", CardType.Duel, "Target player takes 1 damage.", true, "Pick a dueling opponent", "/assets/cards/duel.png")
+        },
+        {
+            CardType.Panic,
+            new CardDefinition("Panic!", CardType.Panic, "Steal a random card from a target.", true, "Pick a player to rob", "/assets/cards/panic.png")
+        },
+        {
+            CardType.Saloon,
+            new CardDefinition("Saloon", CardType.Saloon, "All living players heal 1 HP.", false, null, "/assets/cards/saloon.png")
+        },
+        {
+            CardType.WellsFargo,
+            new CardDefinition("Wells Fargo", CardType.WellsFargo, "Draw 3 cards.", false, null, "/assets/cards/wells_fargo.png")
+        },
+        {
+            CardType.GeneralStore,
+            new CardDefinition("General Store", CardType.GeneralStore, "Draw 2 cards.", false, null, "/assets/cards/general_store.png")
+        }
+    };
+
+    public static CardDefinition Get(CardType type) => Definitions[type];
+}
+
+enum CharacterAbility
+{
+    ExtraDraw,
+    DoubleBangDamage,
+    DrawOnHit,
+    DrawWhenEmpty,
+    SteadyHands
+}
+
+record CharacterDefinition(string Name, int MaxHp, CharacterAbility Ability, string Description, string PortraitPath);
+
+static class CharacterLibrary
+{
+    private static readonly List<CharacterDefinition> Characters = new()
+    {
+        new CharacterDefinition(
+            "Lucky Duke",
+            4,
+            CharacterAbility.ExtraDraw,
+            "Start each turn by drawing 3 cards instead of 2.",
+            "/assets/characters/lucky_duke.png"),
+        new CharacterDefinition(
+            "Slab the Killer",
+            4,
+            CharacterAbility.DoubleBangDamage,
+            "Your Bang! cards deal 2 damage.",
+            "/assets/characters/slab_the_killer.png"),
+        new CharacterDefinition(
+            "El Gringo",
+            3,
+            CharacterAbility.DrawOnHit,
+            "Whenever you are hit, draw 1 card.",
+            "/assets/characters/el_gringo.png"),
+        new CharacterDefinition(
+            "Suzy Lafayette",
+            4,
+            CharacterAbility.DrawWhenEmpty,
+            "When you end your turn with no cards, draw 1.",
+            "/assets/characters/suzy_lafayette.png"),
+        new CharacterDefinition(
+            "Rose Doolan",
+            5,
+            CharacterAbility.SteadyHands,
+            "Steady aim gives you +1 max HP.",
+            "/assets/characters/rose_doolan.png"),
+        new CharacterDefinition(
+            "Jesse Jones",
+            4,
+            CharacterAbility.ExtraDraw,
+            "Always ready: draw 3 cards at the start of your turn.",
+            "/assets/characters/jesse_jones.png"),
+        new CharacterDefinition(
+            "Bart Cassidy",
+            4,
+            CharacterAbility.DrawOnHit,
+            "Every time you take damage, draw 1 card.",
+            "/assets/characters/bart_cassidy.png"),
+        new CharacterDefinition(
+            "Paul Regret",
+            5,
+            CharacterAbility.SteadyHands,
+            "Tougher than he looks: +1 max HP.",
+            "/assets/characters/paul_regret.png"),
+        new CharacterDefinition(
+            "Calamity Janet",
+            4,
+            CharacterAbility.DrawWhenEmpty,
+            "Lives on the edge: draw 1 when your hand empties.",
+            "/assets/characters/calamity_janet.png"),
+        new CharacterDefinition(
+            "Kit Carlson",
+            4,
+            CharacterAbility.ExtraDraw,
+            "Scout the trail: draw 3 cards at turn start.",
+            "/assets/characters/kit_carlson.png"),
+        new CharacterDefinition(
+            "Willy the Kid",
+            4,
+            CharacterAbility.DoubleBangDamage,
+            "Fastest gun: Bang! deals 2 damage.",
+            "/assets/characters/willy_the_kid.png"),
+        new CharacterDefinition(
+            "Sid Ketchum",
+            4,
+            CharacterAbility.DrawOnHit,
+            "Pain fuels you: draw 1 card when hit.",
+            "/assets/characters/sid_ketchum.png"),
+        new CharacterDefinition(
+            "Vulture Sam",
+            4,
+            CharacterAbility.ExtraDraw,
+            "Always prepared: draw 3 cards at the start of your turn.",
+            "/assets/characters/vulture_sam.png"),
+        new CharacterDefinition(
+            "Pedro Ramirez",
+            5,
+            CharacterAbility.SteadyHands,
+            "Hardy ranger: +1 max HP.",
+            "/assets/characters/pedro_ramirez.png")
+    };
+
+    public static CharacterDefinition Draw(Random random)
+    {
+        return Characters[random.Next(Characters.Count)];
+    }
 }

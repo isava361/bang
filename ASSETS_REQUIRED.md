@@ -1,32 +1,47 @@
 # Asset Requirements for Bang Online
 
-Use this checklist to gather or create the visual/audio assets needed for a polished tabletop experience.
-
-## Core UI
-- **Main menu background**: Lobby splash art with Bang theme.
-- **Lobby UI panel**: Panel frame for room info, player list, and chat.
-- **Turn indicator**: Icon/badge showing whose turn it is.
-- **Action buttons**: Host/start, end turn, play card, chat send.
-
-## Cards
-- **Card fronts (PNG)**: High-resolution images for each card type (Bang!, Beer, Gatling, Stagecoach, Cat Balou, and future expansions).
-- **Card back (PNG)**: Shared card back art used for hidden hands/decks.
-- **Card highlight overlays**: Hover/selection glow, disabled state.
-
-## Characters & Roles
-- **Player avatar placeholders**: Generic silhouettes or custom portraits.
-- **Role icons**: Sheriff, Deputy, Outlaw, Renegade.
-- **Health indicators**: Bullet tokens or heart icons in multiple sizes.
+Place all assets under `wwwroot/assets/` so the web UI can load them at runtime. The paths below are referenced directly in code and styles.
 
 ## Tabletop Layout
-- **Table background**: Wood or saloon table texture.
-- **Discard pile marker**: Visual slot to place played cards.
-- **Deck marker**: Visual slot to place the draw pile.
+- **Background image**: `wwwroot/assets/backgrounds/table.jpg` (recommended: 1920x1080 or larger, JPG).
 
-## FX & Audio
-- **Sound effects**: Gunshot, card draw, card play, heal, player eliminated.
-- **Ambient loop**: Subtle saloon background music.
+## Cards
+- **Card fronts (PNG, 512x768)**:
+  - `wwwroot/assets/cards/bang.png`
+  - `wwwroot/assets/cards/beer.png`
+  - `wwwroot/assets/cards/gatling.png`
+  - `wwwroot/assets/cards/stagecoach.png`
+  - `wwwroot/assets/cards/cat_balou.png`
+  - `wwwroot/assets/cards/indians.png`
+  - `wwwroot/assets/cards/duel.png`
+  - `wwwroot/assets/cards/panic.png`
+  - `wwwroot/assets/cards/saloon.png`
+  - `wwwroot/assets/cards/wells_fargo.png`
+  - `wwwroot/assets/cards/general_store.png`
+- **Card back (PNG, 512x768)**: `wwwroot/assets/cards/card_back.png` (reserved for future deck UI).
 
-## Branding
-- **App icon**: Executable icon and window icon.
-- **Loading screen**: Optional splash or progress indicator.
+## Characters
+- **Portraits (PNG, 256x256)**:
+  - `wwwroot/assets/characters/lucky_duke.png`
+  - `wwwroot/assets/characters/slab_the_killer.png`
+  - `wwwroot/assets/characters/el_gringo.png`
+  - `wwwroot/assets/characters/suzy_lafayette.png`
+  - `wwwroot/assets/characters/rose_doolan.png`
+  - `wwwroot/assets/characters/jesse_jones.png`
+  - `wwwroot/assets/characters/bart_cassidy.png`
+  - `wwwroot/assets/characters/paul_regret.png`
+  - `wwwroot/assets/characters/calamity_janet.png`
+  - `wwwroot/assets/characters/kit_carlson.png`
+  - `wwwroot/assets/characters/willy_the_kid.png`
+  - `wwwroot/assets/characters/sid_ketchum.png`
+  - `wwwroot/assets/characters/vulture_sam.png`
+  - `wwwroot/assets/characters/pedro_ramirez.png`
+
+## Optional UI Extras
+- **Turn indicator icon (PNG, 128x128)**: `wwwroot/assets/ui/turn_indicator.png`
+- **Button icons (PNG, 64x64)**: `wwwroot/assets/ui/start.png`, `wwwroot/assets/ui/end_turn.png`, `wwwroot/assets/ui/chat.png`
+- **Health tokens (PNG, 64x64)**: `wwwroot/assets/ui/health_token.png`
+
+## Audio (Optional)
+- **Sound effects**: `wwwroot/assets/audio/` (gunshot, card draw, heal, etc.) in `.mp3` or `.wav`.
+- **Ambient loop**: `wwwroot/assets/audio/ambient_saloon.mp3`.
