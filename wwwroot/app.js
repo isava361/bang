@@ -209,9 +209,13 @@ const updateState = (state) => {
   }
 
   currentState = state;
-  turnInfo.textContent = state.started
-    ? `Turn: ${state.currentPlayerName}`
-    : "Waiting for players to start...";
+  if (state.gameOver) {
+    turnInfo.textContent = state.winnerMessage || "Game over.";
+  } else {
+    turnInfo.textContent = state.started
+      ? `Turn: ${state.currentPlayerName}`
+      : "Waiting for players to start...";
+  }
   lastEvent.textContent = state.lastEvent ?? "No events yet.";
   playersContainer.innerHTML = "";
 
@@ -237,6 +241,7 @@ const updateState = (state) => {
         </div>
       </div>
       <small>${player.characterDescription}</small>
+      <p class="role-line">Role: ${player.role}</p>
       <p>HP: ${player.hp} / ${player.maxHp}</p>
       <small>ID: ${player.id.slice(0, 6)}</small>
     `;
@@ -272,7 +277,7 @@ const updateState = (state) => {
   });
 
   const isYourTurn = state.started && state.currentPlayerId === playerId;
-  endTurnButton.disabled = !isYourTurn;
+  endTurnButton.disabled = !isYourTurn || state.gameOver;
 
   if (!state.started || state.currentPlayerId !== playerId) {
     hideTargetOverlay();
