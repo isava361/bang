@@ -1,0 +1,181 @@
+{
+  "Files": [
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\app.js",
+      "PackagePath": "staticwebassets\\app.js"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\backgrounds\\table.jpg",
+      "PackagePath": "staticwebassets\\assets\\backgrounds\\table.jpg"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\a",
+      "PackagePath": "staticwebassets\\assets\\cards"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\bang.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\bang.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\barrel.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\barrel.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\beer.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\beer.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\cat_balou.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\cat_balou.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\duel.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\duel.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\gatling.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\gatling.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\general_store.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\general_store.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\indians.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\indians.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\missed.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\missed.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\mustang.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\mustang.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\panic.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\panic.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\remington.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\remington.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\rev_carabine.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\rev_carabine.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\saloon.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\saloon.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\schofield.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\schofield.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\scope.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\scope.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\stagecoach.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\stagecoach.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\volcanic.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\volcanic.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\wells_fargo.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\wells_fargo.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\winchester.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\winchester.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\a",
+      "PackagePath": "staticwebassets\\assets\\characters"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\bart_cassidy.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\bart_cassidy.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\calamity_janet.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\calamity_janet.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\el_gringo.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\el_gringo.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\jesse_jones.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\jesse_jones.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\kit_carlson.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\kit_carlson.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\lucky_duke.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\lucky_duke.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\paul_regret.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\paul_regret.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\pedro_ramirez.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\pedro_ramirez.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\rose_doolan.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\rose_doolan.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\sid_ketchum.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\sid_ketchum.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\slab_the_killer.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\slab_the_killer.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\suzy_lafayette.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\suzy_lafayette.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\vulture_sam.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\vulture_sam.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\characters\\willy_the_kid.png",
+      "PackagePath": "staticwebassets\\assets\\characters\\willy_the_kid.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\index.html",
+      "PackagePath": "staticwebassets\\index.html"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\styles.css",
+      "PackagePath": "staticwebassets\\styles.css"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.BangOnline.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.build.BangOnline.props",
+      "PackagePath": "build\\BangOnline.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.BangOnline.props",
+      "PackagePath": "buildMultiTargeting\\BangOnline.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildTransitive.BangOnline.props",
+      "PackagePath": "buildTransitive\\BangOnline.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

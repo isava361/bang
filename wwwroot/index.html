@@ -36,6 +36,8 @@
         <div class="actions">
           <button id="startButton">Start Game</button>
           <button id="endTurnButton">End Turn</button>
+          <button id="abilityButton" class="hidden">Ability</button>
+          <button id="newGameButton" class="primary hidden">New Game</button>
         </div>
       </div>
 
@@ -50,12 +52,15 @@
       </div>
 
       <div class="event-log">
-        <h3>Last Event</h3>
-        <p id="lastEvent">No events yet.</p>
+        <h3>Event Log</h3>
+        <div id="eventLog" class="event-list">
+          <p class="hint">No events yet.</p>
+        </div>
       </div>
 
       <div class="chat">
-        <h3>Quick Chat</h3>
+        <h3>Chat</h3>
+        <div id="chatLog" class="chat-list"></div>
         <div class="chat-row">
           <input id="chatInput" type="text" placeholder="Say something…" />
           <button id="chatButton">Send</button>
@@ -77,6 +82,27 @@
       <p id="targetPrompt">Choose who this card should affect.</p>
       <div class="target-list" id="targetList"></div>
       <button id="cancelTarget" class="secondary">Cancel</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="responseOverlay">
+    <div class="overlay-card">
+      <h3 id="responseTitle">Respond</h3>
+      <p id="responsePrompt">Choose how to respond.</p>
+      <div class="target-list" id="responseCards"></div>
+      <button id="responsePass" class="secondary">Take the hit</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="abilityOverlay">
+    <div class="overlay-card">
+      <h3>Sid Ketchum — Heal</h3>
+      <p>Select 2 cards to discard and heal 1 HP.</p>
+      <div class="target-list" id="abilityCards"></div>
+      <div class="actions">
+        <button id="abilityConfirm" class="primary" disabled>Confirm</button>
+        <button id="cancelAbility" class="secondary">Cancel</button>
+      </div>
     </div>
   </div>
 

@@ -21,6 +21,9 @@ The game uses **no persistent database**. All state is held in-memory via a sing
 | `_discardPile` | `List<Card>` | Played/discarded cards |
 | `LastEvent` | `string?` | Only the most recent event (no history) |
 
+Each `PlayerState` now has a `List<Card> InPlay` for equipped blue/weapon cards,
+in addition to the `Hand` list.
+
 ### Key Limitation: No Event Log
 
 Only a single `LastEvent` string is stored. Chat messages also overwrite this field,
@@ -30,148 +33,74 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 
 ## 2. Card Database Analysis
 
-### Deck Composition (60 cards total)
+### Deck Composition (82 cards total)
 
-| Card | Count | % of Deck | Notes |
-|------|-------|-----------|-------|
-| Bang! | 25 | 41.7% | Dominant card — matches original game |
-| Beer | 6 | 10.0% | Reasonable |
-| Stagecoach | 4 | 6.7% | OK |
-| Cat Balou | 4 | 6.7% | OK |
-| Panic! | 4 | 6.7% | OK |
-| Duel | 3 | 5.0% | OK |
-| General Store | 3 | 5.0% | Implementation is wrong (see below) |
-| Gatling | 2 | 3.3% | OK |
-| Indians! | 2 | 3.3% | Implementation is wrong (see below) |
-| Saloon | 2 | 3.3% | OK |
-| Wells Fargo | 2 | 3.3% | OK |
-| **Missed!** | **0** | **0%** | **Critical omission — core defense card** |
+| Card | Count | % of Deck | Category | Notes |
+|------|-------|-----------|----------|-------|
+| Bang! | 22 | 26.8% | Brown | Primary attack card |
+| Missed! | 12 | 14.6% | Brown | Primary defense card |
+| Beer | 6 | 7.3% | Brown | Disabled when ≤2 players remain |
+| Stagecoach | 4 | 4.9% | Brown | OK |
+| Cat Balou | 4 | 4.9% | Brown | Can target hand or equipment |
+| Panic! | 4 | 4.9% | Brown | Range 1; can target hand or equipment |
+| Duel | 3 | 3.7% | Brown | OK |
+| General Store | 3 | 3.7% | Brown | OK |
+| Gatling | 2 | 2.4% | Brown | OK |
+| Indians! | 2 | 2.4% | Brown | OK |
+| Saloon | 2 | 2.4% | Brown | OK |
+| Wells Fargo | 2 | 2.4% | Brown | OK |
+| Schofield | 3 | 3.7% | Weapon | Range 2 |
+| Volcanic | 2 | 2.4% | Weapon | Range 1, unlimited Bang! |
+| Remington | 1 | 1.2% | Weapon | Range 3 |
+| Rev. Carabine | 1 | 1.2% | Weapon | Range 4 |
+| Winchester | 1 | 1.2% | Weapon | Range 5 |
+| Barrel | 2 | 2.4% | Blue | 25%/50% auto-dodge |
+| Mustang | 2 | 2.4% | Blue | Distance +1 to others |
+| Scope | 1 | 1.2% | Blue | Distance -1 to others |
 
 ### Missing Card Types (from the original Bang! game)
 
-**Defensive cards (critical gap):**
-- **Missed!** — The primary defense card. Without it, there is no counterplay to
-  Bang!, making the game purely about who draws more attack cards.
-- **Barrel** — Equipment that gives a chance to dodge shots.
-
-**Blue (equipment) cards entirely missing:**
-- **Mustang** — Increases the distance others need to reach you.
-- **Scope** — Decreases the distance you need to reach others.
+**Blue (equipment) cards not yet implemented:**
 - **Jail** — Skip a player's turn unless they "draw" their way out.
 - **Dynamite** — Passes between players and may explode.
-- **Volcanic** — Weapon that allows unlimited Bang! per turn.
-- **Remington / Rev. Carabine / Winchester** — Weapons with different ranges.
 
 **Other missing action cards:**
 - **Dodge** (from expansions)
-
-### Card Logic Bugs
-
-1. **General Store** (`Program.cs:616`): Currently just draws 2 cards for the
-   player. In the actual game, N cards are revealed (where N = number of alive
-   players) and each player picks one in turn order. This is a significant
-   mechanic that involves all players.
-
-2. **Indians!** (`Program.cs:560`): Currently deals flat 1 damage to everyone
-   with no counterplay. In the actual game, each other player must discard a
-   Bang! card or take 1 damage. This removes a key decision point.
-
-3. **Duel** (`Program.cs:575`): Currently deals flat 1 damage to the target.
-   In the actual game, the challenger and target alternate discarding Bang!
-   cards — the first one who cannot (or chooses not to) takes 1 damage. This
-   is one of the most strategically interesting cards in the game.
-
-4. **Beer** (`Program.cs:514`): Should be disabled when only 2 players remain
-   (official rule). Currently always usable.
-
-5. **Cat Balou** can waste a play if the target has 0 cards — the card is still
-   consumed from the player's hand and discarded, but the message says "has no
-   cards to discard" (`Program.cs:548`). The card should either not be playable
-   on empty-handed targets or at minimum the card should be returned.
 
 ---
 
 ## 3. Character Database Analysis
 
-### Character Distribution by Ability
+### Character Abilities (all 14 unique)
 
-| Ability | Characters | Count | Notes |
-|---------|-----------|-------|-------|
-| ExtraDraw (3 cards/turn) | Lucky Duke, Jesse Jones, Kit Carlson, Vulture Sam | 4 | Overrepresented; these are the strongest characters |
-| DrawOnHit | El Gringo, Bart Cassidy, Sid Ketchum | 3 | OK |
-| SteadyHands (+1 HP) | Rose Doolan, Paul Regret, Pedro Ramirez | 3 | Very generic — just +1 HP |
-| DrawWhenEmpty | Suzy Lafayette, Calamity Janet | 2 | Weak ability |
-| DoubleBangDamage | Slab the Killer | 1 | Very strong — only 1 character has it |
-| ExtraBang (2 per turn) | Willy the Kid | 1 | Unique |
-
-### Issues
-
-1. **Only 6 unique abilities across 14 characters.** Many characters are
-   mechanically identical — Lucky Duke, Jesse Jones, Kit Carlson, and Vulture Sam
-   all do the exact same thing (draw 3 cards per turn). In the original game,
-   each of these characters has a distinct ability.
-
-2. **Character draw uses replacement** (`CharacterLibrary.Draw` at
-   `Program.cs:1010`): Two players can receive the same character since it's
-   `random.Next(Characters.Count)` with no tracking of already-assigned
-   characters. Characters should be drawn without replacement.
-
-3. **Original abilities not implemented:**
-   - **Lucky Duke**: Should draw 2 "luck" cards and choose the best for barrel
-     checks, not just draw 3.
-   - **Jesse Jones**: Should draw first card from another player's hand.
-   - **Kit Carlson**: Should look at top 3 cards and choose 2 to keep.
-   - **Vulture Sam**: Should take all cards from eliminated players.
-   - **Calamity Janet**: Should be able to use Bang! as Missed! and vice versa.
-   - **Sid Ketchum**: Should be able to discard 2 cards to regain 1 HP.
-   - **El Gringo**: Should draw from the attacker's hand when hit (not just
-     draw from deck).
-   - **Paul Regret**: Should be seen at distance +1 by others (not +1 HP).
-   - **Rose Doolan**: Should see others at distance -1 (not +1 HP).
-   - **Pedro Ramirez**: Should draw first card from the discard pile.
-
-4. **ExtraDraw is overpowered.** Drawing 3 cards per turn (50% more than normal)
-   with no downside is the best ability in the game. Four characters share it,
-   so there's a 4/14 ≈ 28.6% chance of getting the best ability.
+| Character | HP | Ability | Notes |
+|-----------|---:|--------|-------|
+| Lucky Duke | 4 | Barrel checks succeed 50% instead of 25% | Passive |
+| Slab the Killer | 4 | Bang! deals 2 damage | Passive |
+| El Gringo | 3 | Draw from attacker's hand when hit | Passive, per damage |
+| Suzy Lafayette | 4 | Draw 1 when hand empties | Triggers after any card consumption |
+| Rose Doolan | 4 | Built-in Scope (distance -1) | Passive |
+| Jesse Jones | 4 | First draw from a chosen player's hand | Draw phase pending action |
+| Bart Cassidy | 4 | Draw 1 from deck when hit | Passive, per damage |
+| Paul Regret | 3 | Built-in Mustang (distance +1) | Passive |
+| Calamity Janet | 4 | Bang! ↔ Missed! interchangeable | Works in play and defense |
+| Kit Carlson | 4 | Look at top 3, keep 2, put 1 back | Draw phase pending action |
+| Willy the Kid | 4 | Unlimited Bang! per turn | Passive |
+| Sid Ketchum | 4 | Discard 2 cards to heal 1 HP | Active ability via /api/ability |
+| Vulture Sam | 4 | Take all cards from eliminated players | Passive on death |
+| Pedro Ramirez | 4 | First draw from discard pile | Automatic in draw phase |
 
 ---
 
 ## 4. Game Logic Issues
 
-### Missing Core Mechanics
+### Remaining Issues
 
-1. **No distance/range system.** In the original game, players sit in a circle
-   and can only target players within their weapon's range. Distance is the
-   core strategic mechanic — it determines who you can shoot and who can shoot
-   you. Currently every player can target every other player.
-
-2. **No Missed! / defense system.** Without the ability to block attacks, the
-   game is purely offensive with no counterplay.
-
-3. **No hand size limit.** In the original game, players must discard down to
-   their current HP at the end of their turn. This creates interesting decisions
-   about which cards to keep. Currently players can hoard unlimited cards.
-
-4. **No equipment/blue card slots.** The original game has "blue border" cards
-   that stay in play in front of you (weapons, barrel, mustang, scope, jail,
-   dynamite). This entire subsystem is missing.
-
-5. **Dead player card handling.** When a player dies, their hand simply
-   disappears. In the original game:
-   - Vulture Sam takes all their cards.
-   - Otherwise cards are discarded.
-   - If the Sheriff kills a Deputy, the Sheriff discards their entire hand as
-     a penalty.
-
-6. **No role reveal on death.** Dead players' roles are never revealed to other
-   players (only the Sheriff's role is shown). The role should be revealed when
-   a player is eliminated — this is critical for the social deduction aspect.
-
-7. **Players can target themselves** with targeted cards like Bang!, Cat Balou,
-   Panic!, and Duel. The game should prevent self-targeting.
-
-8. **Turn order is alphabetical** (`Program.cs:197`), not based on seating
+1. **Turn order is alphabetical** (`Program.cs`), not based on seating
    position. This is fine for a simplified version but worth noting.
+
+2. **Jail and Dynamite** are not yet implemented. These are the two remaining
+   blue cards from the original game.
 
 ### Win Condition Edge Cases
 
@@ -186,7 +115,7 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 
 ## 5. Frontend / UX Issues
 
-1. **Polling at 4-second intervals** (`app.js:509`): Feels sluggish in a
+1. **Polling at 4-second intervals** (`app.js`): Feels sluggish in a
    real-time game. Consider reducing to 1-2 seconds or switching to
    WebSocket/Server-Sent Events for instant updates.
 
@@ -202,58 +131,37 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 5. **No visual feedback** on card play success — the card just disappears
    from the hand.
 
-6. **No indication of how many cards** opponents hold (important strategic
-   info in the original game).
-
-7. **No "new game" button** after game over — players must refresh and rejoin.
+6. **No "new game" button** after game over — players must refresh and rejoin.
 
 ---
 
 ## 6. Prioritized Improvement Suggestions
 
-### Priority 1 — Game-Breaking Fixes
+### Priority 1 — Quality of Life
 
 | # | Improvement | Impact |
 |---|-------------|--------|
-| 1 | **Add Missed! cards** (15-20 in deck) and implement defense response flow | Transforms gameplay from pure offense to strategic play |
-| 2 | **Fix General Store** to let each player pick a card | Restores a core multiplayer interaction card |
-| 3 | **Fix Indians!** so players can discard a Bang! to avoid damage | Adds counterplay and hand management decisions |
-| 4 | **Fix Duel** to alternate Bang! discards between players | Restores the most strategic card interaction |
-| 5 | **Prevent duplicate character assignment** | Ensures each player has a unique identity |
-| 6 | **Add hand size limit** (discard to HP at end of turn) | Prevents card hoarding and adds end-of-turn decisions |
-
-### Priority 2 — Important Gameplay Additions
-
-| # | Improvement | Impact |
-|---|-------------|--------|
-| 7 | **Add distance/range system** with circular seating | Core strategic layer of the original game |
-| 8 | **Add equipment (blue) cards**: Barrel, Mustang, Scope, weapons | Adds persistent board state and loadout customization |
-| 9 | **Give each character a unique ability** instead of sharing 6 abilities across 14 | Makes character selection meaningful |
-| 10 | **Reveal roles on death** to all players | Essential for social deduction gameplay |
-| 11 | **Prevent self-targeting** on attack/steal cards | Bug fix |
-| 12 | **Disable Beer in 1v1** (2-player remaining) | Official rule |
-
-### Priority 3 — Quality of Life
-
-| # | Improvement | Impact |
-|---|-------------|--------|
-| 13 | **Add event history log** (store last N events, not just one) | Players can catch up on what happened |
-| 14 | **Separate chat from game events** | Prevents chat from hiding game actions |
-| 15 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay |
-| 16 | **Show opponent hand sizes** | Important strategic information |
-| 17 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
-| 18 | **Add reconnection support** (store playerId in localStorage) | Prevents losing session on page refresh |
-| 19 | **Support multiple game rooms** | Allows concurrent games |
-| 20 | **Add "New Game" button** after game over | Avoids manual server restart |
+| 1 | **Add event history log** (store last N events, not just one) | Players can catch up on what happened |
+| 2 | **Separate chat from game events** | Prevents chat from hiding game actions |
+| 3 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay |
+| 4 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
+| 5 | **Add reconnection support** (store playerId in localStorage) | Prevents losing session on page refresh |
+| 6 | **Support multiple game rooms** | Allows concurrent games |
+| 7 | **Add "New Game" button** after game over | Avoids manual server restart |
+| 8 | **Add Jail and Dynamite** blue cards | Completes the original card set |
 
 ---
 
 ## 7. Summary
 
-The game has a solid foundation with clean code architecture and a working
-multiplayer flow. The most impactful improvements center around adding the
-**Missed! card** (and the defense response system it requires), fixing three
-incorrectly-implemented cards (General Store, Indians!, Duel), and making each
-character mechanically unique. These changes would transform the game from a
-simplified "draw and attack" experience into something much closer to the
-strategic depth of the original Bang! card game.
+The game now has a comprehensive implementation of the core Bang! mechanics.
+All 14 characters have **unique, faithful abilities** matching the original
+game. The **distance/range system** uses circular seating with weapon range,
+Mustang, Scope, and character modifiers. **Equipment (blue) cards** stay in
+play in front of players — Barrel provides auto-dodge, weapons set range,
+Mustang and Scope modify distance. **Cat Balou and Panic!** can target
+equipment or hand cards. **Dead player cards** are properly handled (discarded
+or taken by Vulture Sam, Sheriff-kills-Deputy penalty). **Roles are revealed
+on death**, **Beer is disabled in 1v1**, and **self-targeting is blocked**.
+The remaining improvements are quality-of-life: event history, chat separation,
+real-time updates, persistence, reconnection, multiple rooms, and new game flow.

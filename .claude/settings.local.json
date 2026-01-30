@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(ls \"C:\\\\Users\\\\Ivan\\\\OneDrive\\\\Документы\\\\GitHub\\\\bang\\\\wwwroot\\\\assets\\\\cards\"\" 2>nul || echo \"Directory not found \")"
+    ]
+  }
+}
