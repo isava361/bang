@@ -48,6 +48,42 @@ let lobbyInterval = null;
 
 const suitSymbols = { Spades: "\u2660", Hearts: "\u2665", Diamonds: "\u2666", Clubs: "\u2663" };
 const suitColors = { Spades: "#a0a0b0", Hearts: "#e04040", Diamonds: "#e04040", Clubs: "#a0a0b0" };
+const formatCountLabel = (count, singular, few, many) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return singular;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+};
+const cardTypeLabels = {
+  Bang: "Бэнг!",
+  Missed: "Мимо!",
+  Beer: "Пиво",
+  Gatling: "Гатлинг",
+  Stagecoach: "Дилижанс",
+  CatBalou: "Красотка",
+  Indians: "Индейцы!",
+  Duel: "Дуэль",
+  Panic: "Паника!",
+  Saloon: "Салун",
+  WellsFargo: "Уэллс Фарго",
+  GeneralStore: "Магазин",
+  Barrel: "Бочка",
+  Mustang: "Мустанг",
+  Scope: "Прицел",
+  Volcanic: "Вулканик",
+  Schofield: "Скофилд",
+  Remington: "Ремингтон",
+  RevCarabine: "Карабин",
+  Winchester: "Винчестер",
+  Jail: "Тюрьма",
+  Dynamite: "Динамит",
+};
+const cardCategoryLabels = {
+  Brown: "Коричневая",
+  Blue: "Синяя",
+  Weapon: "Оружие",
+};
 
 const formatCardValue = (value) => {
   if (value === 11) return "J";
@@ -66,196 +102,196 @@ const formatSuitValue = (card) => {
 
 const cardsReference = [
   {
-    name: "Bang!",
+    name: "Бэнг!",
     type: "Bang",
-    description: "Deal 1 damage (2 if you're Slab the Killer).",
+    description: "Нанесите 1 урон (2, если вы Слэб Убийца).",
     imagePath: "/assets/cards/bang.png",
   },
   {
-    name: "Missed!",
+    name: "Мимо!",
     type: "Missed",
-    description: "Play when shot to negate the damage.",
+    description: "Сыграйте в ответ на выстрел, чтобы отменить урон.",
     imagePath: "/assets/cards/missed.png",
   },
   {
-    name: "Beer",
+    name: "Пиво",
     type: "Beer",
-    description: "Recover 1 HP. Disabled with 2 players left.",
+    description: "Восстановите 1 ОЗ. Недоступно, когда осталось 2 игрока.",
     imagePath: "/assets/cards/beer.png",
   },
   {
-    name: "Gatling",
+    name: "Гатлинг",
     type: "Gatling",
-    description: "Each other player must play a Missed! or take 1 damage.",
+    description: "Каждый другой игрок должен сыграть Мимо! или получить 1 урон.",
     imagePath: "/assets/cards/gatling.png",
   },
   {
-    name: "Stagecoach",
+    name: "Дилижанс",
     type: "Stagecoach",
-    description: "Draw 2 cards.",
+    description: "Доберите 2 карты.",
     imagePath: "/assets/cards/stagecoach.png",
   },
   {
-    name: "Cat Balou",
+    name: "Красотка",
     type: "CatBalou",
-    description: "Force a target to discard a card (hand or equipment).",
+    description: "Заставьте цель сбросить карту (рука или снаряжение).",
     imagePath: "/assets/cards/cat_balou.png",
   },
   {
-    name: "Indians!",
+    name: "Индейцы!",
     type: "Indians",
-    description: "Each other player must discard a Bang! or take 1 damage.",
+    description: "Каждый другой игрок должен сбросить Бэнг! или получить 1 урон.",
     imagePath: "/assets/cards/indians.png",
   },
   {
-    name: "Duel",
+    name: "Дуэль",
     type: "Duel",
-    description: "Challenge a player — alternate discarding Bang! cards.",
+    description: "Вызовите игрока на дуэль — по очереди сбрасывайте Бэнг!.",
     imagePath: "/assets/cards/duel.png",
   },
   {
-    name: "Panic!",
+    name: "Паника!",
     type: "Panic",
-    description: "Steal a card from a player at distance 1.",
+    description: "Украдите карту у игрока на дистанции 1.",
     imagePath: "/assets/cards/panic.png",
   },
   {
-    name: "Saloon",
+    name: "Салун",
     type: "Saloon",
-    description: "All living players heal 1 HP.",
+    description: "Все живые игроки лечатся на 1 ОЗ.",
     imagePath: "/assets/cards/saloon.png",
   },
   {
-    name: "Wells Fargo",
+    name: "Уэллс Фарго",
     type: "WellsFargo",
-    description: "Draw 3 cards.",
+    description: "Доберите 3 карты.",
     imagePath: "/assets/cards/wells_fargo.png",
   },
   {
-    name: "General Store",
+    name: "Магазин",
     type: "GeneralStore",
-    description: "Reveal cards equal to alive players. Each picks one.",
+    description: "Откройте карты по числу живых игроков. Каждый выбирает одну.",
     imagePath: "/assets/cards/general_store.png",
   },
   {
-    name: "Barrel",
+    name: "Бочка",
     type: "Barrel",
-    description: "When shot, 'draw!' \u2014 if Hearts, the shot is dodged.",
+    description: "При выстреле, «проверка» — если червы, выстрел избегается.",
     imagePath: "/assets/cards/barrel.png",
   },
   {
-    name: "Mustang",
+    name: "Мустанг",
     type: "Mustang",
-    description: "Others see you at distance +1.",
+    description: "Другие видят вас на дистанции +1.",
     imagePath: "/assets/cards/mustang.png",
   },
   {
-    name: "Scope",
+    name: "Прицел",
     type: "Scope",
-    description: "You see others at distance -1.",
+    description: "Вы видите других на дистанции -1.",
     imagePath: "/assets/cards/scope.png",
   },
   {
-    name: "Volcanic",
+    name: "Вулканик",
     type: "Volcanic",
-    description: "Weapon (range 1). Unlimited Bang! per turn.",
+    description: "Оружие (дальность 1). Можно играть Бэнг! без ограничения за ход.",
     imagePath: "/assets/cards/volcanic.png",
   },
   {
-    name: "Schofield",
+    name: "Скофилд",
     type: "Schofield",
-    description: "Weapon (range 2).",
+    description: "Оружие (дальность 2).",
     imagePath: "/assets/cards/schofield.png",
   },
   {
-    name: "Remington",
+    name: "Ремингтон",
     type: "Remington",
-    description: "Weapon (range 3).",
+    description: "Оружие (дальность 3).",
     imagePath: "/assets/cards/remington.png",
   },
   {
-    name: "Rev. Carabine",
+    name: "Карабин",
     type: "RevCarabine",
-    description: "Weapon (range 4).",
+    description: "Оружие (дальность 4).",
     imagePath: "/assets/cards/rev_carabine.png",
   },
   {
-    name: "Winchester",
+    name: "Винчестер",
     type: "Winchester",
-    description: "Weapon (range 5).",
+    description: "Оружие (дальность 5).",
     imagePath: "/assets/cards/winchester.png",
   },
 ];
 
 const charactersReference = [
   {
-    name: "Lucky Duke",
-    description: "When you 'draw!', flip 2 cards and choose the best result.",
+    name: "Счастливчик Дьюк",
+    description: "При «проверке» откройте 2 карты и выберите лучший результат.",
     portraitPath: "/assets/characters/lucky_duke.png",
   },
   {
-    name: "Slab the Killer",
-    description: "Your Bang! cards deal 2 damage.",
+    name: "Слэб Убийца",
+    description: "Ваши Бэнг! наносят 2 урона.",
     portraitPath: "/assets/characters/slab_the_killer.png",
   },
   {
-    name: "El Gringo",
-    description: "When hit, draw a card from the attacker's hand.",
+    name: "Эль Гринго",
+    description: "При получении урона возьмите карту из руки атакующего.",
     portraitPath: "/assets/characters/el_gringo.png",
   },
   {
-    name: "Suzy Lafayette",
-    description: "Whenever your hand becomes empty, draw 1 card.",
+    name: "Сьюзи Лафайет",
+    description: "Когда рука становится пустой, возьмите 1 карту.",
     portraitPath: "/assets/characters/suzy_lafayette.png",
   },
   {
-    name: "Rose Doolan",
-    description: "Built-in Scope: you see others at distance -1.",
+    name: "Роуз Дулан",
+    description: "Встроенный Прицел: вы видите других на дистанции -1.",
     portraitPath: "/assets/characters/rose_doolan.png",
   },
   {
-    name: "Jesse Jones",
-    description: "Draw your first card from a chosen player's hand.",
+    name: "Джесси Джонс",
+    description: "Первую карту берите из руки выбранного игрока.",
     portraitPath: "/assets/characters/jesse_jones.png",
   },
   {
-    name: "Bart Cassidy",
-    description: "Each time you take damage, draw 1 card from the deck.",
+    name: "Барт Кэссиди",
+    description: "Каждый раз при получении урона берите 1 карту из колоды.",
     portraitPath: "/assets/characters/bart_cassidy.png",
   },
   {
-    name: "Paul Regret",
-    description: "Built-in Mustang: others see you at distance +1.",
+    name: "Пол Регрет",
+    description: "Встроенный Мустанг: другие видят вас на дистанции +1.",
     portraitPath: "/assets/characters/paul_regret.png",
   },
   {
-    name: "Calamity Janet",
-    description: "Use Bang! as Missed! and Missed! as Bang!.",
+    name: "Каламити Джанет",
+    description: "Используйте Бэнг! как Мимо! и Мимо! как Бэнг!.",
     portraitPath: "/assets/characters/calamity_janet.png",
   },
   {
-    name: "Kit Carlson",
-    description: "Look at the top 3 cards, keep 2, put 1 back.",
+    name: "Кит Карлсон",
+    description: "Посмотрите 3 верхние карты, оставьте 2, 1 верните.",
     portraitPath: "/assets/characters/kit_carlson.png",
   },
   {
-    name: "Willy the Kid",
-    description: "You can play unlimited Bang! cards per turn.",
+    name: "Уилли Кид",
+    description: "Можно играть Бэнг! без ограничения за ход.",
     portraitPath: "/assets/characters/willy_the_kid.png",
   },
   {
-    name: "Sid Ketchum",
-    description: "Discard 2 cards to regain 1 HP (on your turn).",
+    name: "Сид Кетчум",
+    description: "Сбросьте 2 карты, чтобы восстановить 1 ОЗ (в свой ход).",
     portraitPath: "/assets/characters/sid_ketchum.png",
   },
   {
-    name: "Vulture Sam",
-    description: "When a player is eliminated, take all their cards.",
+    name: "Стервятник Сэм",
+    description: "Когда игрок устранён, возьмите все его карты.",
     portraitPath: "/assets/characters/vulture_sam.png",
   },
   {
-    name: "Pedro Ramirez",
-    description: "Draw your first card from the discard pile.",
+    name: "Педро Рамирес",
+    description: "Первую карту берите из сброса.",
     portraitPath: "/assets/characters/pedro_ramirez.png",
   },
 ];
@@ -314,15 +350,15 @@ const updateState = (state) => {
     spectatorBanner.classList.toggle("hidden", !isSpectator);
   }
   if (roomCodeBadge && state.roomCode) {
-    roomCodeBadge.textContent = `Room: ${state.roomCode}`;
+    roomCodeBadge.textContent = `Комната: ${state.roomCode}`;
     roomCodeBadge.classList.remove("hidden");
   }
   if (state.gameOver) {
-    turnInfo.textContent = state.winnerMessage || "Game over.";
+    turnInfo.textContent = state.winnerMessage || "Игра окончена.";
   } else {
     turnInfo.textContent = state.started
-      ? `Turn: ${state.currentPlayerName}`
-      : "Waiting for players to start...";
+      ? `Ход: ${state.currentPlayerName}`
+      : "Ожидание начала игры...";
   }
   eventLog.innerHTML = "";
   if (state.eventLog && state.eventLog.length > 0) {
@@ -333,7 +369,7 @@ const updateState = (state) => {
       eventLog.appendChild(p);
     });
   } else {
-    eventLog.innerHTML = '<p class="hint">No events yet.</p>';
+    eventLog.innerHTML = '<p class="hint">Событий пока нет.</p>';
   }
 
   chatLog.innerHTML = "";
@@ -374,10 +410,10 @@ const updateState = (state) => {
       : "";
 
     const distanceHtml = state.distances && state.distances[player.id] != null
-      ? `<small class="distance-label">Distance: ${state.distances[player.id]}</small>`
+      ? `<small class="distance-label">Дистанция: ${state.distances[player.id]}</small>`
       : "";
 
-    const hostBadge = state.hostId === player.id ? '<span class="host-badge">HOST</span>' : "";
+    const hostBadge = state.hostId === player.id ? '<span class="host-badge">Ведущий</span>' : "";
 
     card.innerHTML = `
       <div class="player-header">
@@ -388,8 +424,8 @@ const updateState = (state) => {
         </div>
       </div>
       <small>${player.characterDescription}</small>
-      <p class="role-line">Role: ${player.role}</p>
-      <p>HP: ${player.hp} / ${player.maxHp} | Cards: ${player.handCount}</p>
+      <p class="role-line">Роль: ${player.role}</p>
+      <p>ОЗ: ${player.hp} / ${player.maxHp} | Карты: ${player.handCount}</p>
       ${equipHtml ? `<div class="equip-row">${equipHtml}</div>` : ""}
       ${distanceHtml}
     `;
@@ -398,9 +434,9 @@ const updateState = (state) => {
 
   handCards.innerHTML = "";
   if (state.yourHand.length === 0) {
-    handHint.textContent = "No cards in hand. End your turn or wait for draws.";
+    handHint.textContent = "В руке нет карт. Завершите ход или дождитесь добора.";
   } else {
-    handHint.textContent = "Click a card to play it.";
+    handHint.textContent = "Нажмите на карту, чтобы сыграть.";
   }
 
   state.yourHand.forEach((card, index) => {
@@ -413,13 +449,13 @@ const updateState = (state) => {
       state.currentPlayerId === playerId &&
       state.bangsPlayedThisTurn >= state.bangLimit
     ) {
-      element.dataset.tooltip = `You can only play ${state.bangLimit} Bang! each turn.`;
+      element.dataset.tooltip = `Можно сыграть только ${state.bangLimit} Бэнг! за ход.`;
     }
     const imageHtml = card.imagePath
       ? `<img class="card-image" src="${card.imagePath}" alt="${card.name}" onerror="this.style.display='none'"/>`
       : "";
-    const categoryTag = card.category === "Blue" || card.category === "Weapon"
-      ? `<span class="tag equip">${card.category}</span>`
+    const categoryTag = card.category === "Blue" || card.category === "Weapon" || card.category === "Brown"
+      ? `<span class="tag equip">${cardCategoryLabels[card.category] || card.category}</span>`
       : "";
     const suitValueLabel = card.suit
       ? `<span class="suit-badge" style="color:${suitColors[card.suit] || '#fff'}">${formatSuitValue(card)}</span>`
@@ -431,8 +467,8 @@ const updateState = (state) => {
         <small>${card.description}</small>
       </div>
       <div>
-        <span class="tag">${card.type}</span>
-        ${card.requiresTarget ? "<span class=\"tag\">Target</span>" : ""}
+        <span class="tag">${cardTypeLabels[card.type] || card.type}</span>
+        ${card.requiresTarget ? "<span class=\"tag\">Цель</span>" : ""}
         ${categoryTag}
       </div>
     `;
@@ -453,7 +489,7 @@ const updateState = (state) => {
     const myChar = getMyCharacterName(state);
     const me = state.players.find((p) => p.id === playerId);
     const canUseAbility = !isSpectator && isYourTurn && !state.gameOver && !hasPending &&
-      myChar === "Sid Ketchum" && state.yourHand.length >= 2 &&
+      myChar === "Сид Кетчум" && state.yourHand.length >= 2 &&
       me && me.hp < me.maxHp;
     abilityButton.classList.toggle("hidden", !canUseAbility);
   }
@@ -472,7 +508,7 @@ const updateState = (state) => {
     } else {
       hideResponseOverlay();
       if (!state.gameOver) {
-        turnInfo.textContent = `Waiting for ${pa.respondingPlayerName} to respond...`;
+        turnInfo.textContent = `Ожидание ответа от ${pa.respondingPlayerName}...`;
       }
     }
   } else {
@@ -487,9 +523,9 @@ const showTargetOverlay = (card, index) => {
 
   selectedCard = { card, index };
   targetList.innerHTML = "";
-  targetPrompt.textContent = card.targetHint || "Choose who to target.";
+  targetPrompt.textContent = card.targetHint || "Выберите цель.";
 
-  const effectiveType = card.type === "Missed" && getMyCharacterName(currentState) === "Calamity Janet"
+  const effectiveType = card.type === "Missed" && getMyCharacterName(currentState) === "Каламити Джанет"
     ? "Bang"
     : card.type;
 
@@ -508,20 +544,20 @@ const showTargetOverlay = (card, index) => {
     });
 
   if (availableTargets.length === 0) {
-    targetPrompt.textContent = "No available targets yet. Ask another player to join.";
+    targetPrompt.textContent = "Пока нет доступных целей. Попросите другого игрока присоединиться.";
     const empty = document.createElement("div");
     empty.className = "hint";
-    empty.textContent = "Targets will appear once another player joins the table.";
+    empty.textContent = "Цели появятся, когда к столу присоединится другой игрок.";
     targetList.appendChild(empty);
   } else {
     availableTargets.forEach((player) => {
       const button = document.createElement("button");
       button.className = "target-button";
-      const distLabel = player.distance != null ? ` [dist: ${player.distance}]` : "";
+      const distLabel = player.distance != null ? ` [дист: ${player.distance}]` : "";
       button.textContent = `${player.name} (${player.characterName})${distLabel}`;
       if (player.outOfRange) {
         button.disabled = true;
-        button.title = "Out of range";
+        button.title = "Вне дальности";
       } else {
         button.addEventListener("click", () => playCard(index, player.id));
       }
@@ -544,7 +580,7 @@ const showResponseOverlay = (pendingAction, state) => {
   const type = pendingAction.type;
 
   if (type === "GeneralStorePick" || type === "KitCarlsonPick") {
-    responseTitle.textContent = type === "GeneralStorePick" ? "General Store" : "Kit Carlson";
+    responseTitle.textContent = type === "GeneralStorePick" ? "Магазин" : "Кит Карлсон";
     responsePass.classList.add("hidden");
     if (pendingAction.revealedCards) {
       pendingAction.revealedCards.forEach((card, idx) => {
@@ -557,7 +593,7 @@ const showResponseOverlay = (pendingAction, state) => {
       });
     }
   } else if (type === "DiscardExcess") {
-    responseTitle.textContent = "Discard";
+    responseTitle.textContent = "Сброс";
     responsePass.classList.add("hidden");
     state.yourHand.forEach((card, idx) => {
       const button = document.createElement("button");
@@ -568,12 +604,12 @@ const showResponseOverlay = (pendingAction, state) => {
       responseCards.appendChild(button);
     });
   } else if (type === "ChooseStealSource") {
-    responseTitle.textContent = "Choose Target";
+    responseTitle.textContent = "Выбор цели";
     responsePass.classList.add("hidden");
 
     const handButton = document.createElement("button");
     handButton.className = "target-button";
-    handButton.textContent = "Random card from hand";
+    handButton.textContent = "Случайная карта из руки";
     handButton.addEventListener("click", () => respondToAction("hand", null));
     responseCards.appendChild(handButton);
 
@@ -582,13 +618,13 @@ const showResponseOverlay = (pendingAction, state) => {
         const button = document.createElement("button");
         button.className = "target-button";
         const sv = card.suit ? ` ${formatSuitValue(card)}` : "";
-        button.textContent = `Equipment: ${card.name}${sv}`;
+        button.textContent = `Снаряжение: ${card.name}${sv}`;
         button.addEventListener("click", () => respondToAction("equipment", idx));
         responseCards.appendChild(button);
       });
     }
   } else if (type === "JesseJonesSteal") {
-    responseTitle.textContent = "Jesse Jones";
+    responseTitle.textContent = "Джесси Джонс";
     responsePass.classList.add("hidden");
 
     const targets = state.players.filter(
@@ -597,13 +633,13 @@ const showResponseOverlay = (pendingAction, state) => {
     if (targets.length === 0) {
       const hint = document.createElement("div");
       hint.className = "hint";
-      hint.textContent = "No players with cards to draw from.";
+      hint.textContent = "Нет игроков с картами для взятия.";
       responseCards.appendChild(hint);
     } else {
       targets.forEach((player) => {
         const button = document.createElement("button");
         button.className = "target-button";
-        button.textContent = `${player.name} (${player.handCount} cards)`;
+        button.textContent = `${player.name} (${player.handCount} карт)`;
         button.addEventListener("click", () => respondToAction("steal", null, player.id));
         responseCards.appendChild(button);
       });
@@ -612,7 +648,7 @@ const showResponseOverlay = (pendingAction, state) => {
     const isIndians = type === "IndiansDefense";
     const isDuel = type === "DuelChallenge";
     const myChar = getMyCharacterName(state);
-    const isJanet = myChar === "Calamity Janet";
+    const isJanet = myChar === "Каламити Джанет";
 
     let requiredTypes;
     if (isIndians || isDuel) {
@@ -620,11 +656,11 @@ const showResponseOverlay = (pendingAction, state) => {
     } else {
       requiredTypes = isJanet ? ["Missed", "Bang"] : ["Missed"];
     }
-    const requiredName = requiredTypes.map((t) => t === "Bang" ? "Bang!" : "Missed!").join("/");
+    const requiredName = requiredTypes.map((t) => t === "Bang" ? "Бэнг!" : "Мимо!").join("/");
 
-    responseTitle.textContent = isDuel ? "Duel" : "Defend";
+    responseTitle.textContent = isDuel ? "Дуэль" : "Защита";
     responsePass.classList.remove("hidden");
-    responsePass.textContent = isDuel ? "Give up" : "Take the hit";
+    responsePass.textContent = isDuel ? "Сдаться" : "Принять удар";
 
     const validCards = state.yourHand
       .map((card, idx) => ({ card, idx }))
@@ -633,13 +669,13 @@ const showResponseOverlay = (pendingAction, state) => {
     if (validCards.length === 0) {
       const hint = document.createElement("div");
       hint.className = "hint";
-      hint.textContent = `You have no ${requiredName} cards to play.`;
+      hint.textContent = `У вас нет карт ${requiredName} для ответа.`;
       responseCards.appendChild(hint);
     } else {
       validCards.forEach(({ card, idx }) => {
         const button = document.createElement("button");
         button.className = "target-button";
-        button.textContent = `Play ${card.name}`;
+        button.textContent = `Сыграть ${card.name}`;
         button.addEventListener("click", () => respondToAction("play_card", idx));
         responseCards.appendChild(button);
       });
@@ -675,25 +711,25 @@ const onCardSelected = (card, index, element) => {
   }
 
   if (!currentState.started) {
-    setStatus("Start the game before playing cards.");
+    setStatus("Начните игру перед тем, как играть карты.");
     return;
   }
 
   if (currentState.pendingAction) {
-    setStatus("Waiting for a player to respond.");
+    setStatus("Ожидание ответа игрока.");
     return;
   }
 
   if (currentState.currentPlayerId !== playerId) {
-    setStatus("Wait for your turn to play a card.");
+    setStatus("Дождитесь своего хода, чтобы сыграть карту.");
     return;
   }
 
   const myChar = getMyCharacterName(currentState);
-  const effectiveType = card.type === "Missed" && myChar === "Calamity Janet" ? "Bang" : card.type;
+  const effectiveType = card.type === "Missed" && myChar === "Каламити Джанет" ? "Bang" : card.type;
 
   if (effectiveType === "Bang" && currentState.bangsPlayedThisTurn >= currentState.bangLimit) {
-    showCardTooltip(element, `You can only play ${currentState.bangLimit} Bang! each turn.`);
+    showCardTooltip(element, `Можно сыграть только ${currentState.bangLimit} Бэнг! за ход.`);
     return;
   }
 
@@ -777,7 +813,7 @@ const apiPost = async (url, body) => {
 
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.message || "Request failed.");
+    throw new Error(payload.message || "Запрос не выполнен.");
   }
 
   return payload.data;
@@ -795,7 +831,7 @@ const enterLobby = () => {
 const joinGame = async () => {
   const name = playerNameInput.value.trim();
   if (!name) {
-    setStatus("Enter a name to join.");
+    setStatus("Введите имя, чтобы присоединиться.");
     return;
   }
   localStorage.setItem("bangPlayerName", name);
@@ -815,7 +851,7 @@ const createRoom = async () => {
 const joinRoom = async (code) => {
   const name = localStorage.getItem("bangPlayerName") || playerNameInput.value.trim();
   if (!name) {
-    setStatus("Enter a name first.");
+    setStatus("Сначала введите имя.");
     return;
   }
   try {
@@ -829,7 +865,7 @@ const joinRoom = async (code) => {
     if (lobbyPanel) lobbyPanel.classList.add("hidden");
     joinPanel.classList.add("hidden");
     gamePanel.classList.remove("hidden");
-    setStatus(`Connected as ${name}`);
+    setStatus(`Подключены как ${name}`);
     updateState(data.state);
   } catch (error) {
     setStatus(error.message);
@@ -848,7 +884,7 @@ const leaveRoom = async () => {
   localStorage.removeItem("bangRoomCode");
   gamePanel.classList.add("hidden");
   enterLobby();
-  setStatus("Left the room.");
+  setStatus("Вы вышли из комнаты.");
 };
 
 const refreshRoomList = async () => {
@@ -859,7 +895,7 @@ const refreshRoomList = async () => {
     if (!response.ok || !payload.data) return;
     roomListContainer.innerHTML = "";
     if (payload.data.length === 0) {
-      roomListContainer.innerHTML = '<p class="hint">No rooms yet. Create one!</p>';
+      roomListContainer.innerHTML = '<p class="hint">Пока нет комнат. Создайте!</p>';
       return;
     }
     payload.data.forEach((room) => {
@@ -869,9 +905,12 @@ const refreshRoomList = async () => {
         <div>
           <strong class="room-code-badge">${room.roomCode}</strong>
           <span>${room.statusText}</span>
-          <small>${room.playerCount} player${room.playerCount !== 1 ? "s" : ""}, ${room.spectatorCount} spectator${room.spectatorCount !== 1 ? "s" : ""}</small>
+          <small>
+            ${room.playerCount} ${formatCountLabel(room.playerCount, "игрок", "игрока", "игроков")},
+            ${room.spectatorCount} ${formatCountLabel(room.spectatorCount, "зритель", "зрителя", "зрителей")}
+          </small>
         </div>
-        <button class="primary">Join</button>
+        <button class="primary">Войти</button>
       `;
       item.querySelector("button").addEventListener("click", () => joinRoom(room.roomCode));
       roomListContainer.appendChild(item);
@@ -984,7 +1023,7 @@ if (joinRoomButton) {
   joinRoomButton.addEventListener("click", () => {
     const code = roomCodeInput ? roomCodeInput.value.trim().toUpperCase() : "";
     if (code) joinRoom(code);
-    else setStatus("Enter a room code.");
+    else setStatus("Введите код комнаты.");
   });
 }
 
@@ -1038,7 +1077,7 @@ const tryReconnect = async () => {
       joinPanel.classList.add("hidden");
       if (lobbyPanel) lobbyPanel.classList.add("hidden");
       gamePanel.classList.remove("hidden");
-      setStatus(`Reconnected as ${savedName || "player"}`);
+      setStatus(`Переподключены как ${savedName || "игрок"}`);
       updateState(payload.data);
     } else {
       localStorage.removeItem("bangPlayerId");
