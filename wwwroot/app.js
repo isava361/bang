@@ -30,11 +30,21 @@ const abilityOverlay = document.getElementById("abilityOverlay");
 const abilityCards = document.getElementById("abilityCards");
 const abilityConfirm = document.getElementById("abilityConfirm");
 const cancelAbility = document.getElementById("cancelAbility");
+const lobbyPanel = document.getElementById("lobbyPanel");
+const createRoomButton = document.getElementById("createRoomButton");
+const roomCodeInput = document.getElementById("roomCodeInput");
+const joinRoomButton = document.getElementById("joinRoomButton");
+const roomListContainer = document.getElementById("roomList");
+const leaveButton = document.getElementById("leaveButton");
+const spectatorBanner = document.getElementById("spectatorBanner");
+const roomCodeBadge = document.getElementById("roomCodeBadge");
 
 let playerId = null;
+let roomCode = null;
 let currentState = null;
 let selectedCard = null;
 let abilitySelectedIndices = [];
+let lobbyInterval = null;
 
 const suitSymbols = { Spades: "\u2660", Hearts: "\u2665", Diamonds: "\u2666", Clubs: "\u2663" };
 const suitColors = { Spades: "#a0a0b0", Hearts: "#e04040", Diamonds: "#e04040", Clubs: "#a0a0b0" };
@@ -299,6 +309,14 @@ const updateState = (state) => {
   }
 
   currentState = state;
+  const isSpectator = !!state.isSpectator;
+  if (spectatorBanner) {
+    spectatorBanner.classList.toggle("hidden", !isSpectator);
+  }
+  if (roomCodeBadge && state.roomCode) {
+    roomCodeBadge.textContent = `Room: ${state.roomCode}`;
+    roomCodeBadge.classList.remove("hidden");
+  }
   if (state.gameOver) {
     turnInfo.textContent = state.winnerMessage || "Game over.";
   } else {
@@ -359,11 +377,13 @@ const updateState = (state) => {
       ? `<small class="distance-label">Distance: ${state.distances[player.id]}</small>`
       : "";
 
+    const hostBadge = state.hostId === player.id ? '<span class="host-badge">HOST</span>' : "";
+
     card.innerHTML = `
       <div class="player-header">
         ${portraitHtml}
         <div>
-          <strong>${player.name}</strong>
+          <strong>${player.name}</strong>${hostBadge}
           <p>${player.characterName}</p>
         </div>
       </div>
@@ -422,12 +442,17 @@ const updateState = (state) => {
 
   const hasPending = !!state.pendingAction;
   const isYourTurn = state.started && state.currentPlayerId === playerId;
-  endTurnButton.disabled = !isYourTurn || state.gameOver || hasPending;
+  const isHost = state.hostId === playerId;
+  endTurnButton.disabled = !isYourTurn || state.gameOver || hasPending || isSpectator;
+  startButton.disabled = isSpectator || !isHost;
+  if (newGameButton) {
+    newGameButton.disabled = !isHost;
+  }
 
   if (abilityButton) {
     const myChar = getMyCharacterName(state);
     const me = state.players.find((p) => p.id === playerId);
-    const canUseAbility = isYourTurn && !state.gameOver && !hasPending &&
+    const canUseAbility = !isSpectator && isYourTurn && !state.gameOver && !hasPending &&
       myChar === "Sid Ketchum" && state.yourHand.length >= 2 &&
       me && me.hp < me.maxHp;
     abilityButton.classList.toggle("hidden", !canUseAbility);
@@ -758,18 +783,50 @@ const apiPost = async (url, body) => {
   return payload.data;
 };
 
+const enterLobby = () => {
+  joinPanel.classList.add("hidden");
+  if (lobbyPanel) lobbyPanel.classList.remove("hidden");
+  gamePanel.classList.add("hidden");
+  refreshRoomList();
+  if (lobbyInterval) clearInterval(lobbyInterval);
+  lobbyInterval = setInterval(refreshRoomList, 3000);
+};
+
 const joinGame = async () => {
   const name = playerNameInput.value.trim();
   if (!name) {
     setStatus("Enter a name to join.");
     return;
   }
+  localStorage.setItem("bangPlayerName", name);
+  enterLobby();
+};
 
+const createRoom = async () => {
   try {
-    const data = await apiPost("/api/join", { name });
+    const data = await apiPost("/api/room/create", {});
+    const code = data.roomCode;
+    await joinRoom(code);
+  } catch (error) {
+    setStatus(error.message);
+  }
+};
+
+const joinRoom = async (code) => {
+  const name = localStorage.getItem("bangPlayerName") || playerNameInput.value.trim();
+  if (!name) {
+    setStatus("Enter a name first.");
+    return;
+  }
+  try {
+    const data = await apiPost("/api/join", { name, roomCode: code });
     playerId = data.playerId;
+    roomCode = code;
     localStorage.setItem("bangPlayerId", playerId);
     localStorage.setItem("bangPlayerName", name);
+    localStorage.setItem("bangRoomCode", code);
+    if (lobbyInterval) { clearInterval(lobbyInterval); lobbyInterval = null; }
+    if (lobbyPanel) lobbyPanel.classList.add("hidden");
     joinPanel.classList.add("hidden");
     gamePanel.classList.remove("hidden");
     setStatus(`Connected as ${name}`);
@@ -777,6 +834,49 @@ const joinGame = async () => {
   } catch (error) {
     setStatus(error.message);
   }
+};
+
+const leaveRoom = async () => {
+  if (!playerId) return;
+  try {
+    await apiPost("/api/leave", { playerId });
+  } catch {}
+  playerId = null;
+  roomCode = null;
+  currentState = null;
+  localStorage.removeItem("bangPlayerId");
+  localStorage.removeItem("bangRoomCode");
+  gamePanel.classList.add("hidden");
+  enterLobby();
+  setStatus("Left the room.");
+};
+
+const refreshRoomList = async () => {
+  if (!roomListContainer) return;
+  try {
+    const response = await fetch("/api/rooms");
+    const payload = await response.json();
+    if (!response.ok || !payload.data) return;
+    roomListContainer.innerHTML = "";
+    if (payload.data.length === 0) {
+      roomListContainer.innerHTML = '<p class="hint">No rooms yet. Create one!</p>';
+      return;
+    }
+    payload.data.forEach((room) => {
+      const item = document.createElement("div");
+      item.className = "room-item";
+      item.innerHTML = `
+        <div>
+          <strong class="room-code-badge">${room.roomCode}</strong>
+          <span>${room.statusText}</span>
+          <small>${room.playerCount} player${room.playerCount !== 1 ? "s" : ""}, ${room.spectatorCount} spectator${room.spectatorCount !== 1 ? "s" : ""}</small>
+        </div>
+        <button class="primary">Join</button>
+      `;
+      item.querySelector("button").addEventListener("click", () => joinRoom(room.roomCode));
+      roomListContainer.appendChild(item);
+    });
+  } catch {}
 };
 
 const startGame = async () => {
@@ -874,6 +974,19 @@ responsePass.addEventListener("click", () => respondToAction("pass", null));
 if (newGameButton) {
   newGameButton.addEventListener("click", newGame);
 }
+if (leaveButton) {
+  leaveButton.addEventListener("click", leaveRoom);
+}
+if (createRoomButton) {
+  createRoomButton.addEventListener("click", createRoom);
+}
+if (joinRoomButton) {
+  joinRoomButton.addEventListener("click", () => {
+    const code = roomCodeInput ? roomCodeInput.value.trim().toUpperCase() : "";
+    if (code) joinRoom(code);
+    else setStatus("Enter a room code.");
+  });
+}
 
 if (abilityButton) {
   abilityButton.addEventListener("click", showAbilityOverlay);
@@ -891,6 +1004,15 @@ playerNameInput.addEventListener("keydown", (event) => {
   }
 });
 
+if (roomCodeInput) {
+  roomCodeInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const code = roomCodeInput.value.trim().toUpperCase();
+      if (code) joinRoom(code);
+    }
+  });
+}
+
 chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     sendChat();
@@ -902,23 +1024,31 @@ renderLibrary();
 const tryReconnect = async () => {
   const savedId = localStorage.getItem("bangPlayerId");
   const savedName = localStorage.getItem("bangPlayerName");
-  if (!savedId) return;
+  const savedRoom = localStorage.getItem("bangRoomCode");
+  if (!savedId) {
+    if (savedName) enterLobby();
+    return;
+  }
   try {
     const response = await fetch(`/api/reconnect?playerId=${savedId}`);
     const payload = await response.json();
     if (response.ok && payload.data) {
       playerId = savedId;
+      roomCode = savedRoom;
       joinPanel.classList.add("hidden");
+      if (lobbyPanel) lobbyPanel.classList.add("hidden");
       gamePanel.classList.remove("hidden");
       setStatus(`Reconnected as ${savedName || "player"}`);
       updateState(payload.data);
     } else {
       localStorage.removeItem("bangPlayerId");
-      localStorage.removeItem("bangPlayerName");
+      localStorage.removeItem("bangRoomCode");
+      if (savedName) enterLobby();
     }
   } catch {
     localStorage.removeItem("bangPlayerId");
-    localStorage.removeItem("bangPlayerName");
+    localStorage.removeItem("bangRoomCode");
+    if (savedName) enterLobby();
   }
 };
 

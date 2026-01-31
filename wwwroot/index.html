@@ -3,75 +3,92 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bang! Online Prototype</title>
+  <title>Bang! Онлайн</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="top-bar">
     <div>
-      <h1>Bang! Online</h1>
-      <p class="subtitle">Web prototype — draw, click, and play from your hand</p>
+      <h1>Bang! Онлайн</h1>
+      <p class="subtitle">Веб-прототип — тяните, кликайте и играйте картами</p>
     </div>
-    <div class="status" id="connectionStatus">Disconnected</div>
+    <div class="status" id="connectionStatus">Отключено</div>
   </header>
 
   <main class="layout">
     <section class="panel" id="joinPanel">
-      <h2>Join the posse</h2>
-      <p>Enter a display name to create or rejoin a table.</p>
+      <h2>Присоединиться</h2>
+      <p>Введите имя, чтобы найти или создать стол.</p>
       <label class="stack">
-        Name
+        Имя
         <input id="playerName" type="text" placeholder="Lucky Duke" />
       </label>
-      <button id="joinButton" class="primary">Join Game</button>
-      <p class="hint">Once at least two players join, start the round.</p>
+      <button id="joinButton" class="primary">Продолжить</button>
+    </section>
+
+    <section class="panel hidden" id="lobbyPanel">
+      <h2>Лобби</h2>
+      <div class="lobby-actions">
+        <button id="createRoomButton" class="primary">Создать комнату</button>
+        <div class="join-room-row">
+          <input id="roomCodeInput" type="text" placeholder="Код комнаты" maxlength="4" />
+          <button id="joinRoomButton">Войти</button>
+        </div>
+      </div>
+      <h3>Доступные комнаты</h3>
+      <div id="roomList" class="room-list">
+        <p class="hint">Пока нет комнат. Создайте!</p>
+      </div>
     </section>
 
     <section class="panel hidden" id="gamePanel">
       <div class="panel-row">
         <div>
-          <h2>Table</h2>
-          <p id="turnInfo">Waiting for players…</p>
+          <span id="roomCodeBadge" class="room-code-badge hidden"></span>
+          <h2>Стол</h2>
+          <p id="turnInfo">Ожидание игроков…</p>
         </div>
         <div class="actions">
-          <button id="startButton">Start Game</button>
-          <button id="endTurnButton">End Turn</button>
-          <button id="abilityButton" class="hidden">Ability</button>
-          <button id="newGameButton" class="primary hidden">New Game</button>
+          <button id="startButton">Начать игру</button>
+          <button id="endTurnButton">Завершить ход</button>
+          <button id="abilityButton" class="hidden">Способность</button>
+          <button id="newGameButton" class="primary hidden">Новая игра</button>
+          <button id="leaveButton" class="secondary">Выйти</button>
         </div>
       </div>
+      <div id="spectatorBanner" class="spectator-banner hidden">Вы наблюдаете за игрой.</div>
 
       <div class="players" id="players"></div>
 
       <div class="hand">
         <div class="hand-header">
-          <h3>Your Hand</h3>
-          <p id="handHint">Click a card to play it.</p>
+          <h3>Ваша рука</h3>
+          <p id="handHint">Нажмите на карту, чтобы сыграть.</p>
         </div>
         <div class="hand-cards" id="handCards"></div>
       </div>
 
       <div class="event-log">
-        <h3>Event Log</h3>
+        <h3>Журнал событий</h3>
         <div id="eventLog" class="event-list">
-          <p class="hint">No events yet.</p>
+          <p class="hint">Событий пока нет.</p>
         </div>
       </div>
 
       <div class="chat">
-        <h3>Chat</h3>
+        <h3>Чат</h3>
         <div id="chatLog" class="chat-list"></div>
         <div class="chat-row">
-          <input id="chatInput" type="text" placeholder="Say something…" />
-          <button id="chatButton">Send</button>
+          <input id="chatInput" type="text" placeholder="Напишите сообщение…" />
+          <button id="chatButton">Отправить</button>
         </div>
       </div>
     </section>
 
     <aside class="panel library">
-      <h2>Card Library</h2>
+      <h2>Библиотека карт</h2>
       <div id="cardLibrary" class="library-grid"></div>
-      <h2>Characters</h2>
+      <h2>Персонажи</h2>
       <div id="characterLibrary" class="library-grid"></div>
     </aside>
   </main>

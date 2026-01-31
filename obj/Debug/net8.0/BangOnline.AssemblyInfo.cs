@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BangOnline")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+68ca45c47b1e7a74ac5c23820dd27ca5c8b1be80")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7c49c503110aa2d7efaf8e17270c2fe6500112f7")]
 [assembly: System.Reflection.AssemblyProductAttribute("BangOnline")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BangOnline")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
