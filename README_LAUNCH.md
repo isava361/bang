@@ -1,34 +1,34 @@
-# Bang Online — Launch Guide
+# Bang Online — Руководство по запуску
 
-This project now hosts a lightweight web UI for the Bang! prototype.
+Этот проект содержит лёгкий веб-интерфейс для прототипа Bang!.
 
-## Run Locally
+## Локальный запуск
 
 ```bash
 dotnet run
 ```
 
-Then open `http://localhost:5000`.
+Затем откройте `http://localhost:5000`.
 
-### Play From Different Locations
+### Игра с разных устройств
 
-Run the server so it listens on all interfaces, then share your public or LAN IP:
+Запустите сервер так, чтобы он слушал все интерфейсы, затем поделитесь публичным или локальным IP:
 
 ```bash
 dotnet run --urls http://0.0.0.0:5000
 ```
 
-Players can join using `http://<host-ip>:5000` from their own browsers.
+Игроки могут подключаться через `http://<host-ip>:5000` в своих браузерах.
 
-## Web UI Flow
+## Сценарий использования веб-интерфейса
 
-1. Enter a display name and join the table.
-2. Have at least two players join (use multiple browsers or tabs).
-3. Click **Start Game** to deal cards.
-4. Click a card in your hand to play it. If a target is required, select a player.
-5. Click **End Turn** to advance.
+1. Введите имя и присоединитесь к столу.
+2. Подключите минимум двух игроков (можно использовать разные браузеры или вкладки).
+3. Нажмите **Начать игру**, чтобы раздать карты.
+4. Нажмите на карту в руке, чтобы сыграть её. Если нужна цель, выберите игрока.
+5. Нажмите **Завершить ход**, чтобы продолжить.
 
-## Notes
+## Примечания
 
-- The rules are a streamlined version of Bang! to support online play; extend the card system as needed.
-- Max players per room: 6.
+- Правила — упрощённая версия Bang! для онлайн-игры; при необходимости расширяйте набор карт.
+- Максимум игроков в комнате: 6.

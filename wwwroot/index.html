@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -21,7 +21,7 @@
       <p>Введите имя, чтобы найти или создать стол.</p>
       <label class="stack">
         Имя
-        <input id="playerName" type="text" placeholder="Lucky Duke" />
+        <input id="playerName" type="text" placeholder="Лаки Дьюк" />
       </label>
       <button id="joinButton" class="primary">Продолжить</button>
     </section>
@@ -95,30 +95,30 @@
 
   <div class="overlay hidden" id="targetOverlay">
     <div class="overlay-card">
-      <h3>Select a target</h3>
-      <p id="targetPrompt">Choose who this card should affect.</p>
+      <h3>Выберите цель</h3>
+      <p id="targetPrompt">Выберите, кого должна затронуть эта карта.</p>
       <div class="target-list" id="targetList"></div>
-      <button id="cancelTarget" class="secondary">Cancel</button>
+      <button id="cancelTarget" class="secondary">Отмена</button>
     </div>
   </div>
 
   <div class="overlay hidden" id="responseOverlay">
     <div class="overlay-card">
-      <h3 id="responseTitle">Respond</h3>
-      <p id="responsePrompt">Choose how to respond.</p>
+      <h3 id="responseTitle">Ответ</h3>
+      <p id="responsePrompt">Выберите способ ответа.</p>
       <div class="target-list" id="responseCards"></div>
-      <button id="responsePass" class="secondary">Take the hit</button>
+      <button id="responsePass" class="secondary">Принять удар</button>
     </div>
   </div>
 
   <div class="overlay hidden" id="abilityOverlay">
     <div class="overlay-card">
-      <h3>Sid Ketchum — Heal</h3>
-      <p>Select 2 cards to discard and heal 1 HP.</p>
+      <h3>Сид Кетчум — Лечение</h3>
+      <p>Выберите 2 карты для сброса и восстановите 1 ОЗ.</p>
       <div class="target-list" id="abilityCards"></div>
       <div class="actions">
-        <button id="abilityConfirm" class="primary" disabled>Confirm</button>
-        <button id="cancelAbility" class="secondary">Cancel</button>
+        <button id="abilityConfirm" class="primary" disabled>Подтвердить</button>
+        <button id="cancelAbility" class="secondary">Отмена</button>
       </div>
     </div>
   </div>

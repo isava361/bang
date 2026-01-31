@@ -25,7 +25,7 @@ app.MapPost("/api/room/create", (RoomManager rooms) =>
 
 app.MapGet("/api/rooms", (RoomManager rooms) =>
 {
-    return Results.Ok(new ApiResponse(rooms.ListRooms(), "OK"));
+    return Results.Ok(new ApiResponse(rooms.ListRooms(), "ОК"));
 });
 
 app.MapPost("/api/join", (JoinRoomRequest request, RoomManager rooms) =>
@@ -157,7 +157,7 @@ app.MapGet("/api/reconnect", (string playerId, RoomManager rooms) =>
 
     var state = game.IsSpectator(playerId) ? game.ToSpectatorView(playerId) : game.ToView(playerId);
     if (state is null) return Results.BadRequest(new ApiResponse(null, "Неизвестный игрок."));
-    return Results.Ok(new ApiResponse(state, "OK"));
+    return Results.Ok(new ApiResponse(state, "ОК"));
 });
 
 app.MapGet("/api/state", (string playerId, RoomManager rooms) =>
@@ -167,7 +167,7 @@ app.MapGet("/api/state", (string playerId, RoomManager rooms) =>
 
     var state = game.IsSpectator(playerId) ? game.ToSpectatorView(playerId) : game.ToView(playerId);
     if (state is null) return Results.BadRequest(new ApiResponse(null, "Неизвестный игрок."));
-    return Results.Ok(new ApiResponse(state, "OK"));
+    return Results.Ok(new ApiResponse(state, "ОК"));
 });
 
 app.Run();
@@ -398,15 +398,15 @@ class GameState
             }
 
             var card = player.Hand[index];
-            var isCalamityJanet = player.Character.Name == "Calamity Janet";
+            var isCalamityJanet = player.Character.Name == "Каламити Джанет";
             if (card.Type == CardType.Missed && !isCalamityJanet)
             {
-                return new CommandResult(false, "Missed! можно играть только в ответ на выстрел.");
+                return new CommandResult(false, "Мимо! можно играть только в ответ на выстрел.");
             }
 
             if (card.Type == CardType.Beer && _players.Values.Count(p => p.IsAlive) <= 2)
             {
-                return new CommandResult(false, "Beer нельзя использовать, когда осталось 2 или менее игроков.");
+                return new CommandResult(false, "Пиво нельзя использовать, когда осталось 2 или менее игроков.");
             }
 
             var effectiveType = card.Type;
@@ -418,7 +418,7 @@ class GameState
             if (effectiveType == CardType.Bang && player.BangsPlayedThisTurn >= GetBangLimit(player))
             {
                 var limit = GetBangLimit(player);
-                return new CommandResult(false, $"Можно сыграть только {limit} Bang! за ход.");
+                return new CommandResult(false, $"Можно сыграть только {limit} Бах! за ход.");
             }
 
             var needsTarget = card.RequiresTarget || effectiveType == CardType.Bang;
@@ -437,7 +437,7 @@ class GameState
                 }
                 if (effectiveType == CardType.Panic && distance > 1)
                 {
-                    return new CommandResult(false, $"{target.Name} вне зоны досягаемости для Panic! (расстояние {distance}, нужно 1).");
+                    return new CommandResult(false, $"{target.Name} вне зоны досягаемости для Паники! (расстояние {distance}, нужно 1).");
                 }
             }
 
@@ -466,11 +466,11 @@ class GameState
             {
                 if (player.InPlay.Any(c => c.Type == CardType.Dynamite))
                 {
-                    return new CommandResult(false, "У вас уже есть Dynamite в игре.");
+                    return new CommandResult(false, "У вас уже есть Динамит в игре.");
                 }
                 player.Hand.RemoveAt(index);
                 player.InPlay.Add(card);
-                var dynMsg = $"{player.Name} играет Dynamite!";
+                var dynMsg = $"{player.Name} играет Динамит!";
                 AddEvent(dynMsg);
                 return new CommandResult(true, dynMsg, ToView(playerId));
             }
@@ -677,12 +677,12 @@ class GameState
                         }
 
                         var card = responder.Hand[cardIndex.Value];
-                        var isJanet = responder.Character.Name == "Calamity Janet";
+                        var isJanet = responder.Character.Name == "Каламити Джанет";
                         if (card.Type != CardType.Missed && !(isJanet && card.Type == CardType.Bang))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сыграть Missed! или Bang!, чтобы увернуться."
-                                : "Нужно сыграть Missed!, чтобы увернуться.");
+                                ? "Нужно сыграть Мимо! или Бах!, чтобы увернуться."
+                                : "Нужно сыграть Мимо!, чтобы увернуться.");
                         }
 
                         responder.Hand.RemoveAt(cardIndex.Value);
@@ -693,8 +693,8 @@ class GameState
                     else
                     {
                         var damage = _pendingAction.Damage;
-                        ApplyDamage(source ?? responder, responder, damage, "shot");
-                        message = FormatAttackMessage(source ?? responder, responder, "shot", damage);
+                        ApplyDamage(source ?? responder, responder, damage, "стреляет в");
+                        message = FormatAttackMessage(source ?? responder, responder, "стреляет в", damage);
                     }
 
                     _pendingAction.RespondingPlayerIds.Dequeue();
@@ -715,12 +715,12 @@ class GameState
                         }
 
                         var card = responder.Hand[cardIndex.Value];
-                        var isJanet = responder.Character.Name == "Calamity Janet";
+                        var isJanet = responder.Character.Name == "Каламити Джанет";
                         if (card.Type != CardType.Bang && !(isJanet && card.Type == CardType.Missed))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сбросить Bang! или Missed!, чтобы избежать атаки индейцев."
-                                : "Нужно сбросить Bang!, чтобы избежать атаки индейцев.");
+                                ? "Нужно сбросить Бах! или Мимо!, чтобы избежать атаки индейцев."
+                                : "Нужно сбросить Бах!, чтобы избежать атаки индейцев.");
                         }
 
                         responder.Hand.RemoveAt(cardIndex.Value);
@@ -760,12 +760,12 @@ class GameState
                         }
 
                         var card = responder.Hand[cardIndex.Value];
-                        var isJanet = responder.Character.Name == "Calamity Janet";
+                        var isJanet = responder.Character.Name == "Каламити Джанет";
                         if (card.Type != CardType.Bang && !(isJanet && card.Type == CardType.Missed))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сыграть Bang! или Missed!, чтобы продолжить дуэль."
-                                : "Нужно сыграть Bang!, чтобы продолжить дуэль.");
+                                ? "Нужно сыграть Бах! или Мимо!, чтобы продолжить дуэль."
+                                : "Нужно сыграть Бах!, чтобы продолжить дуэль.");
                         }
 
                         responder.Hand.RemoveAt(cardIndex.Value);
@@ -806,7 +806,7 @@ class GameState
                     var pickedCard = _pendingAction.RevealedCards[cardIndex.Value];
                     _pendingAction.RevealedCards.RemoveAt(cardIndex.Value);
                     responder.Hand.Add(pickedCard);
-                    message = $"{responder.Name} берёт {pickedCard.Name} из General Store.";
+                    message = $"{responder.Name} берёт {pickedCard.Name} из Магазина.";
 
                     _pendingAction.RespondingPlayerIds.Dequeue();
                     if (_pendingAction.RespondingPlayerIds.Count == 0 || _pendingAction.RevealedCards.Count == 0)
@@ -881,7 +881,7 @@ class GameState
                     }
                     else
                     {
-                        return new CommandResult(false, "Выберите 'hand' или 'equipment'.");
+                        return new CommandResult(false, "Выберите источник: рука или снаряжение.");
                     }
 
                     _pendingAction = null;
@@ -1020,7 +1020,7 @@ class GameState
                 return new CommandResult(false, "Неизвестный игрок.");
             }
 
-            if (player.Character.Name != "Sid Ketchum")
+            if (player.Character.Name != "Сид Кетчум")
             {
                 return new CommandResult(false, "У вашего персонажа нет активной способности.");
             }
@@ -1054,7 +1054,7 @@ class GameState
             _discardPile.Add(card2);
 
             player.Hp = Math.Min(player.Hp + 1, player.MaxHp);
-            var message = $"{player.Name} сбрасывает {card1.Name} и {card2.Name}, чтобы восстановить 1 HP.";
+            var message = $"{player.Name} сбрасывает {card1.Name} и {card2.Name}, чтобы восстановить 1 ОЗ.";
             AddEvent(message);
             CheckSuzyLafayette(player);
             return new CommandResult(true, message, ToView(playerId));
@@ -1272,7 +1272,7 @@ class GameState
                     p.Hp,
                     p.MaxHp,
                     p.IsAlive,
-                    TranslateRole(GameOver || !p.IsAlive || p.Role == Role.Sheriff ? p.Role.ToString() : "Unknown"),
+                    TranslateRole(GameOver || !p.IsAlive || p.Role == Role.Sheriff ? p.Role.ToString() : "Неизвестно"),
                     GameOver || !p.IsAlive || p.Role == Role.Sheriff,
                     p.Character.Name,
                     p.Character.Description,
@@ -1355,11 +1355,11 @@ class GameState
                 var responder = _players[responderId];
                 var message = _pendingAction.Type switch
                 {
-                    PendingActionType.BangDefense => $"Сыграйте Missed!, чтобы увернуться, или получите {_pendingAction.Damage} урона.",
-                    PendingActionType.GatlingDefense => "Сыграйте Missed!, чтобы увернуться от Gatling, или получите 1 урон.",
-                    PendingActionType.IndiansDefense => "Сбросьте Bang!, чтобы избежать индейцев, или получите 1 урон.",
-                    PendingActionType.DuelChallenge => "Сыграйте Bang!, чтобы продолжить дуэль, или получите 1 урон.",
-                    PendingActionType.GeneralStorePick => "Выберите карту из General Store.",
+                    PendingActionType.BangDefense => $"Сыграйте Мимо!, чтобы увернуться, или получите {_pendingAction.Damage} урона.",
+                    PendingActionType.GatlingDefense => "Сыграйте Мимо!, чтобы увернуться от Гатлинга, или получите 1 урон.",
+                    PendingActionType.IndiansDefense => "Сбросьте Бах!, чтобы избежать индейцев, или получите 1 урон.",
+                    PendingActionType.DuelChallenge => "Сыграйте Бах!, чтобы продолжить дуэль, или получите 1 урон.",
+                    PendingActionType.GeneralStorePick => "Выберите карту из Магазина.",
                     PendingActionType.DiscardExcess => $"Сбросьте до {responder.Hp} карт (осталось сбросить: {responder.Hand.Count - responder.Hp}).",
                     PendingActionType.ChooseStealSource => $"Выберите: случайная карта из руки или конкретное снаряжение.",
                     PendingActionType.JesseJonesSteal => "Выберите игрока, у которого взять карту.",
@@ -1449,7 +1449,7 @@ class GameState
         if (dynamite != null)
         {
             current.InPlay.Remove(dynamite);
-            bool isLuckyDuke = current.Character.Name == "Lucky Duke";
+            bool isLuckyDuke = current.Character.Name == "Лаки Дьюк";
             bool explodes;
 
             if (isLuckyDuke)
@@ -1459,19 +1459,19 @@ class GameState
                 bool e1 = card1.Suit == CardSuit.Spades && card1.Value >= 2 && card1.Value <= 9;
                 bool e2 = card2.Suit == CardSuit.Spades && card2.Value >= 2 && card2.Value <= 9;
                 explodes = e1 && e2;
-                AddEvent($"Проверка Dynamite! {current.Name} (Lucky Duke): {FormatCheckCard(card1)} и {FormatCheckCard(card2)}");
+                AddEvent($"Проверка Динамита! {current.Name} (Лаки Дьюк): {FormatCheckCard(card1)} и {FormatCheckCard(card2)}");
             }
             else
             {
                 var check = DrawCheckCard();
                 explodes = check.Suit == CardSuit.Spades && check.Value >= 2 && check.Value <= 9;
-                AddEvent($"Проверка Dynamite! {current.Name}: {FormatCheckCard(check)}");
+                AddEvent($"Проверка Динамита! {current.Name}: {FormatCheckCard(check)}");
             }
 
             if (explodes)
             {
                 _discardPile.Add(dynamite);
-                AddEvent($"БУМ! Dynamite взрывается у {current.Name} и наносит 3 урона!");
+                AddEvent($"БУМ! Динамит взрывается у {current.Name} и наносит 3 урона!");
                 ApplyDamage(current, current, 3, "взорван динамитом");
                 if (GameOver) return;
                 if (!current.IsAlive)
@@ -1491,7 +1491,7 @@ class GameState
                 {
                     var nextPlayer = _players[nextAliveId];
                     nextPlayer.InPlay.Add(dynamite);
-                    AddEvent($"Dynamite не взорвался и переходит к {nextPlayer.Name}.");
+                    AddEvent($"Динамит не взорвался и переходит к {nextPlayer.Name}.");
                 }
                 else
                 {
@@ -1506,7 +1506,7 @@ class GameState
         {
             current.InPlay.Remove(jail);
             _discardPile.Add(jail);
-            bool isLuckyDuke = current.Character.Name == "Lucky Duke";
+            bool isLuckyDuke = current.Character.Name == "Лаки Дьюк";
             bool escapes;
 
             if (isLuckyDuke)
@@ -1514,13 +1514,13 @@ class GameState
                 var card1 = DrawCheckCard();
                 var card2 = DrawCheckCard();
                 escapes = card1.Suit == CardSuit.Hearts || card2.Suit == CardSuit.Hearts;
-                AddEvent($"Проверка Jail! {current.Name} (Lucky Duke): {FormatCheckCard(card1)} и {FormatCheckCard(card2)}");
+                AddEvent($"Проверка Тюрьмы! {current.Name} (Лаки Дьюк): {FormatCheckCard(card1)} и {FormatCheckCard(card2)}");
             }
             else
             {
                 var check = DrawCheckCard();
                 escapes = check.Suit == CardSuit.Hearts;
-                AddEvent($"Проверка Jail! {current.Name}: {FormatCheckCard(check)}");
+                AddEvent($"Проверка Тюрьмы! {current.Name}: {FormatCheckCard(check)}");
             }
 
             if (escapes)
@@ -1547,7 +1547,7 @@ class GameState
     {
         switch (player.Character.Name)
         {
-            case "Jesse Jones":
+            case "Джесси Джонс":
             {
                 var validTargets = _players.Values
                     .Where(p => p.IsAlive && p.Id != player.Id && p.Hand.Count > 0)
@@ -1565,7 +1565,7 @@ class GameState
                 DrawCards(player, 2);
                 break;
             }
-            case "Kit Carlson":
+            case "Кит Карлсон":
             {
                 var revealedCards = new List<Card>();
                 for (var i = 0; i < 3; i++)
@@ -1588,7 +1588,7 @@ class GameState
                 AddEvent($"Ход {player.Name} начинается. Выберите 2 из 3 открытых карт.");
                 return;
             }
-            case "Pedro Ramirez":
+            case "Педро Рамирес":
             {
                 if (_discardPile.Count > 0)
                 {
@@ -1611,7 +1611,7 @@ class GameState
 
     private int GetBangLimit(PlayerState player)
     {
-        if (player.Character.Name == "Willy the Kid") return int.MaxValue;
+        if (player.Character.Name == "Уилли Кид") return int.MaxValue;
         if (player.InPlay.Any(c => c.Type == CardType.Volcanic)) return int.MaxValue;
         return 1;
     }
@@ -1647,10 +1647,10 @@ class GameState
         var source = _players[fromId];
 
         if (target.InPlay.Any(c => c.Type == CardType.Mustang)) baseDistance += 1;
-        if (target.Character.Name == "Paul Regret") baseDistance += 1;
+        if (target.Character.Name == "Пол Регрет") baseDistance += 1;
 
         if (source.InPlay.Any(c => c.Type == CardType.Scope)) baseDistance -= 1;
-        if (source.Character.Name == "Rose Doolan") baseDistance -= 1;
+        if (source.Character.Name == "Роуз Дулан") baseDistance -= 1;
 
         return Math.Max(1, baseDistance);
     }
@@ -1809,7 +1809,7 @@ class GameState
         if (_drawPile.Count == 0) ReshuffleDiscardIntoDraw();
         if (_drawPile.Count == 0)
         {
-            return new Card("Check", CardType.Bang, CardCategory.Brown, "", false, null, "", CardSuit.Clubs, 10);
+            return new Card("Проверка", CardType.Bang, CardCategory.Brown, "", false, null, "", CardSuit.Clubs, 10);
         }
         var card = _drawPile.Pop();
         _discardPile.Add(card);
@@ -1834,7 +1834,7 @@ class GameState
 
     private void CheckSuzyLafayette(PlayerState player)
     {
-        if (player.Character.Name == "Suzy Lafayette" && player.IsAlive && player.Hand.Count == 0)
+        if (player.Character.Name == "Сьюзи Лафайет" && player.IsAlive && player.Hand.Count == 0)
         {
             DrawCards(player, 1);
         }
@@ -1844,28 +1844,28 @@ class GameState
     {
         if (!target.InPlay.Any(c => c.Type == CardType.Barrel)) return false;
 
-        if (target.Character.Name == "Lucky Duke")
+        if (target.Character.Name == "Лаки Дьюк")
         {
             var card1 = DrawCheckCard();
             var card2 = DrawCheckCard();
             var success = card1.Suit == CardSuit.Hearts || card2.Suit == CardSuit.Hearts;
-            AddEvent($"Проверка Barrel! {target.Name} (Lucky Duke): {FormatCheckCard(card1)} и {FormatCheckCard(card2)} \u2014 {(success ? "увернулся!" : "не повезло.")}");
+            AddEvent($"Проверка Бочки! {target.Name} (Лаки Дьюк): {FormatCheckCard(card1)} и {FormatCheckCard(card2)} \u2014 {(success ? "увернулся!" : "не повезло.")}");
             return success;
         }
 
         var check = DrawCheckCard();
         var result = check.Suit == CardSuit.Hearts;
-        AddEvent($"Проверка Barrel! {target.Name}: {FormatCheckCard(check)} \u2014 {(result ? "увернулся!" : "не повезло.")}");
+        AddEvent($"Проверка Бочки! {target.Name}: {FormatCheckCard(check)} \u2014 {(result ? "увернулся!" : "не повезло.")}");
         return result;
     }
 
     private string ResolveBang(PlayerState attacker, PlayerState target)
     {
-        var damage = attacker.Character.Name == "Slab the Killer" ? 2 : 1;
+        var damage = attacker.Character.Name == "Слэб Убийца" ? 2 : 1;
 
         if (CheckBarrel(target))
         {
-            return $"{attacker.Name} стреляет в {target.Name}, но Barrel спасает {target.Name}!";
+            return $"{attacker.Name} стреляет в {target.Name}, но Бочка спасает {target.Name}!";
         }
 
         _pendingAction = new PendingAction(
@@ -1884,7 +1884,7 @@ class GameState
         }
 
         player.Hp = Math.Min(player.Hp + 1, player.MaxHp);
-        return $"{player.Name} выпивает Beer и восстанавливает 1 HP.";
+        return $"{player.Name} выпивает Пиво и восстанавливает 1 ОЗ.";
     }
 
     private string ResolveGatling(PlayerState attacker)
@@ -1892,7 +1892,7 @@ class GameState
         var allResponders = GetOtherAlivePlayersInTurnOrder(attacker.Id);
         if (allResponders.Count == 0)
         {
-            return $"{attacker.Name} стреляет из Gatling, но некого поразить.";
+            return $"{attacker.Name} стреляет из Гатлинга, но некого поразить.";
         }
 
         var barrelSaved = new List<string>();
@@ -1910,31 +1910,31 @@ class GameState
             }
         }
 
-        var barrelMsg = barrelSaved.Count > 0 ? $" {string.Join(", ", barrelSaved)} увернулись с помощью Barrel!" : "";
+        var barrelMsg = barrelSaved.Count > 0 ? $" {string.Join(", ", barrelSaved)} увернулись с помощью Бочки!" : "";
 
         if (needsResponse.Count == 0)
         {
-            return $"{attacker.Name} стреляет из Gatling!{barrelMsg} Все в безопасности.";
+            return $"{attacker.Name} стреляет из Гатлинга!{barrelMsg} Все в безопасности.";
         }
 
         _pendingAction = new PendingAction(
             PendingActionType.GatlingDefense,
             attacker.Id,
             needsResponse);
-        return $"{attacker.Name} стреляет из Gatling!{barrelMsg} Оставшиеся игроки должны сыграть Missed! или получить 1 урон.";
+        return $"{attacker.Name} стреляет из Гатлинга!{barrelMsg} Оставшиеся игроки должны сыграть Мимо! или получить 1 урон.";
     }
 
     private string ResolveStagecoach(PlayerState player)
     {
         DrawCards(player, 2);
-        return $"{player.Name} играет Stagecoach и тянет 2 карты.";
+        return $"{player.Name} играет Дилижанс и тянет 2 карты.";
     }
 
     private string ResolveCatBalou(PlayerState attacker, PlayerState target)
     {
         if (target.Hand.Count == 0 && target.InPlay.Count == 0)
         {
-            return $"{target.Name} has no cards to discard.";
+            return $"{target.Name} не имеет карт для сброса.";
         }
 
         if (target.Hand.Count > 0 && target.InPlay.Count > 0)
@@ -1946,7 +1946,7 @@ class GameState
             _pendingAction.StealTargetId = target.Id;
             _pendingAction.StealMode = "discard";
             _pendingAction.RevealedCards = target.InPlay.ToList();
-            return $"{attacker.Name} uses Cat Balou on {target.Name}! Choose: random hand card or equipment.";
+            return $"{attacker.Name} использует Кэт Балу против {target.Name}! Выберите: случайная карта из руки или снаряжение.";
         }
 
         if (target.Hand.Count > 0)
@@ -1955,13 +1955,13 @@ class GameState
             var discarded = target.Hand[idx];
             target.Hand.RemoveAt(idx);
             _discardPile.Add(discarded);
-            return $"{attacker.Name} uses Cat Balou on {target.Name}, discarding {discarded.Name}.";
+            return $"{attacker.Name} использует Кэт Балу против {target.Name} и сбрасывает {discarded.Name}.";
         }
 
         var equip = target.InPlay[_random.Next(target.InPlay.Count)];
         target.InPlay.Remove(equip);
         _discardPile.Add(equip);
-        return $"{attacker.Name} uses Cat Balou on {target.Name}, discarding {equip.Name}.";
+        return $"{attacker.Name} использует Кэт Балу против {target.Name} и сбрасывает {equip.Name}.";
     }
 
     private string ResolveIndians(PlayerState attacker)
@@ -1969,14 +1969,14 @@ class GameState
         var responders = GetOtherAlivePlayersInTurnOrder(attacker.Id);
         if (responders.Count == 0)
         {
-            return $"{attacker.Name} plays Indians!, but there is no one to hit.";
+            return $"{attacker.Name} играет Индейцы!, но некого атаковать.";
         }
 
         _pendingAction = new PendingAction(
             PendingActionType.IndiansDefense,
             attacker.Id,
             responders);
-        return $"{attacker.Name} plays Indians! Each player must discard a Bang! or take 1 damage.";
+        return $"{attacker.Name} играет Индейцы! Каждый должен сбросить Бах! или получить 1 урон.";
     }
 
     private string ResolveDuel(PlayerState attacker, PlayerState target)
@@ -1987,14 +1987,14 @@ class GameState
             new[] { target.Id });
         _pendingAction.DuelPlayerA = attacker.Id;
         _pendingAction.DuelPlayerB = target.Id;
-        return $"{attacker.Name} challenges {target.Name} to a duel!";
+        return $"{attacker.Name} вызывает {target.Name} на дуэль!";
     }
 
     private string ResolvePanic(PlayerState attacker, PlayerState target)
     {
         if (target.Hand.Count == 0 && target.InPlay.Count == 0)
         {
-            return $"{target.Name} has no cards to steal.";
+            return $"{target.Name} не имеет карт для кражи.";
         }
 
         if (target.Hand.Count > 0 && target.InPlay.Count > 0)
@@ -2006,7 +2006,7 @@ class GameState
             _pendingAction.StealTargetId = target.Id;
             _pendingAction.StealMode = "steal";
             _pendingAction.RevealedCards = target.InPlay.ToList();
-            return $"{attacker.Name} uses Panic! on {target.Name}! Choose: random hand card or equipment.";
+            return $"{attacker.Name} использует Паника! против {target.Name}! Выберите: случайная карта из руки или снаряжение.";
         }
 
         if (target.Hand.Count > 0)
@@ -2015,13 +2015,13 @@ class GameState
             var stolen = target.Hand[idx];
             target.Hand.RemoveAt(idx);
             attacker.Hand.Add(stolen);
-            return $"{attacker.Name} uses Panic! to steal {stolen.Name} from {target.Name}.";
+            return $"{attacker.Name} использует Паника! и крадёт {stolen.Name} у {target.Name}.";
         }
 
         var equip = target.InPlay[_random.Next(target.InPlay.Count)];
         target.InPlay.Remove(equip);
         attacker.Hand.Add(equip);
-        return $"{attacker.Name} uses Panic! to steal {equip.Name} from {target.Name}.";
+        return $"{attacker.Name} использует Паника! и крадёт {equip.Name} у {target.Name}.";
     }
 
     private string ResolveSaloon(PlayerState player)
@@ -2036,13 +2036,13 @@ class GameState
             target.Hp = Math.Min(target.Hp + 1, target.MaxHp);
         }
 
-        return $"{player.Name} opens the Saloon. Everyone heals 1 HP.";
+        return $"{player.Name} открывает Салун. Все восстанавливают 1 ОЗ.";
     }
 
     private string ResolveWellsFargo(PlayerState player)
     {
         DrawCards(player, 3);
-        return $"{player.Name} raids Wells Fargo and draws 3 cards.";
+        return $"{player.Name} грабит Уэллс Фарго и тянет 3 карты.";
     }
 
     private string ResolveGeneralStore(PlayerState player)
@@ -2067,7 +2067,7 @@ class GameState
 
         if (revealedCards.Count == 0)
         {
-            return $"{player.Name} visits the General Store, but the shelves are empty.";
+            return $"{player.Name} заходит в Магазин, но полки пусты.";
         }
 
         _pendingAction = new PendingAction(
@@ -2075,27 +2075,27 @@ class GameState
             player.Id,
             alivePlayers);
         _pendingAction.RevealedCards = revealedCards;
-        return $"{player.Name} opens the General Store! Each player picks a card.";
+        return $"{player.Name} открывает Магазин! Каждый выбирает карту.";
     }
 
     private bool TryGetTarget(string? targetId, string playerId, out PlayerState target, out string error)
     {
         if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out target!))
         {
-            error = "Target player not found.";
+            error = "Игрок-цель не найден.";
             target = null!;
             return false;
         }
 
         if (target.Id == playerId)
         {
-            error = "You cannot target yourself.";
+            error = "Нельзя выбирать себя в качестве цели.";
             return false;
         }
 
         if (!target.IsAlive)
         {
-            error = $"{target.Name} is already out.";
+            error = $"{target.Name} уже выбыл.";
             return false;
         }
 
@@ -2114,11 +2114,11 @@ class GameState
 
         if (target.IsAlive)
         {
-            if (target.Character.Name == "Bart Cassidy")
+            if (target.Character.Name == "Барт Кэссиди")
             {
                 DrawCards(target, damage);
             }
-            else if (target.Character.Name == "El Gringo" && attacker.Id != target.Id)
+            else if (target.Character.Name == "Эль Гринго" && attacker.Id != target.Id)
             {
                 for (var i = 0; i < damage && attacker.Hand.Count > 0; i++)
                 {
@@ -2134,7 +2134,7 @@ class GameState
     private void HandlePlayerDeath(PlayerState killer, PlayerState dead)
     {
         var vultureSam = _players.Values.FirstOrDefault(p =>
-            p.IsAlive && p.Id != dead.Id && p.Character.Name == "Vulture Sam");
+            p.IsAlive && p.Id != dead.Id && p.Character.Name == "Валчер Сэм");
 
         if (vultureSam != null)
         {
@@ -2184,10 +2184,10 @@ class GameState
     {
         if (!target.IsAlive)
         {
-            return $"{attacker.Name} {verb} {target.Name} for {damage} damage. {target.Name} is out!";
+            return $"{attacker.Name} {verb} {target.Name} на {damage} урона. {target.Name} выбыл!";
         }
 
-        return $"{attacker.Name} {verb} {target.Name} for {damage} damage.";
+        return $"{attacker.Name} {verb} {target.Name} на {damage} урона.";
     }
 
     private static readonly CardSuit[] AllSuits = { CardSuit.Spades, CardSuit.Hearts, CardSuit.Diamonds, CardSuit.Clubs };
@@ -2223,7 +2223,7 @@ class GameState
         var sheriff = shuffledPlayers.FirstOrDefault(p => p.Role == Role.Sheriff);
         if (sheriff != null)
         {
-            AddEvent($"{sheriff.Name} is the Sheriff.");
+            AddEvent($"{sheriff.Name} — Шериф.");
         }
     }
 
@@ -2282,15 +2282,15 @@ class GameState
             if (alivePlayers.Count == 1 && renegadeAlive)
             {
                 GameOver = true;
-                WinnerMessage = "Renegade wins by being the last player standing!";
+                WinnerMessage = "Ренегат побеждает, оставшись последним!";
                 AddEvent(WinnerMessage);
                 return;
             }
 
             GameOver = true;
             WinnerMessage = banditsAlive
-                ? "Bandits win by taking down the Sheriff!"
-                : "Bandits win after the Sheriff falls.";
+                ? "Бандиты побеждают, устранив Шерифа!"
+                : "Бандиты побеждают после гибели Шерифа.";
             AddEvent(WinnerMessage);
             return;
         }
@@ -2298,7 +2298,7 @@ class GameState
         if (!banditsAlive && !renegadeAlive)
         {
             GameOver = true;
-            WinnerMessage = "Sheriff and Deputies win by clearing the outlaws!";
+            WinnerMessage = "Шериф и помощники побеждают, очистив город от бандитов!";
             AddEvent(WinnerMessage);
         }
     }
@@ -2310,7 +2310,7 @@ class GameState
 
     private string GetRoleNameForViewer(PlayerState player, PlayerState viewer)
     {
-        return TranslateRole(IsRoleRevealed(player, viewer) ? player.Role.ToString() : "Unknown");
+        return TranslateRole(IsRoleRevealed(player, viewer) ? player.Role.ToString() : "Неизвестно");
     }
 
     private static string TranslateRole(string role) => role switch
@@ -2467,91 +2467,91 @@ static class CardLibrary
     {
         {
             CardType.Bang,
-            new CardDefinition("Bang!", CardType.Bang, CardCategory.Brown, "Deal 1 damage to a target (2 if you are Slab the Killer).", true, "Choose a player to shoot", "/assets/cards/bang.png")
+            new CardDefinition("Бах!", CardType.Bang, CardCategory.Brown, "Нанесите 1 урон цели (2, если вы Слэб Убийца).", true, "Выберите игрока для выстрела", "/assets/cards/bang.png")
         },
         {
             CardType.Missed,
-            new CardDefinition("Missed!", CardType.Missed, CardCategory.Brown, "Play when shot to negate the damage.", false, null, "/assets/cards/missed.png")
+            new CardDefinition("Мимо!", CardType.Missed, CardCategory.Brown, "Сыграйте в ответ на выстрел, чтобы отменить урон.", false, null, "/assets/cards/missed.png")
         },
         {
             CardType.Beer,
-            new CardDefinition("Beer", CardType.Beer, CardCategory.Brown, "Recover 1 HP.", false, null, "/assets/cards/beer.png")
+            new CardDefinition("Пиво", CardType.Beer, CardCategory.Brown, "Восстановите 1 ОЗ.", false, null, "/assets/cards/beer.png")
         },
         {
             CardType.Gatling,
-            new CardDefinition("Gatling", CardType.Gatling, CardCategory.Brown, "Each other player must play a Missed! or take 1 damage.", false, null, "/assets/cards/gatling.png")
+            new CardDefinition("Гатлинг", CardType.Gatling, CardCategory.Brown, "Каждый другой игрок должен сыграть Мимо! или получить 1 урон.", false, null, "/assets/cards/gatling.png")
         },
         {
             CardType.Stagecoach,
-            new CardDefinition("Stagecoach", CardType.Stagecoach, CardCategory.Brown, "Draw 2 cards.", false, null, "/assets/cards/stagecoach.png")
+            new CardDefinition("Дилижанс", CardType.Stagecoach, CardCategory.Brown, "Доберите 2 карты.", false, null, "/assets/cards/stagecoach.png")
         },
         {
             CardType.CatBalou,
-            new CardDefinition("Cat Balou", CardType.CatBalou, CardCategory.Brown, "Force a target to discard a card (hand or equipment).", true, "Pick a player to discard", "/assets/cards/cat_balou.png")
+            new CardDefinition("Кэт Балу", CardType.CatBalou, CardCategory.Brown, "Заставьте цель сбросить карту (рука или снаряжение).", true, "Выберите игрока для сброса", "/assets/cards/cat_balou.png")
         },
         {
             CardType.Indians,
-            new CardDefinition("Indians!", CardType.Indians, CardCategory.Brown, "Each other player must discard a Bang! or take 1 damage.", false, null, "/assets/cards/indians.png")
+            new CardDefinition("Индейцы!", CardType.Indians, CardCategory.Brown, "Каждый другой игрок должен сбросить Бах! или получить 1 урон.", false, null, "/assets/cards/indians.png")
         },
         {
             CardType.Duel,
-            new CardDefinition("Duel", CardType.Duel, CardCategory.Brown, "Challenge a player — alternate discarding Bang! cards. First who can't takes 1 damage.", true, "Pick a dueling opponent", "/assets/cards/duel.png")
+            new CardDefinition("Дуэль", CardType.Duel, CardCategory.Brown, "Вызовите игрока на дуэль — по очереди сбрасывайте Бах!. Кто не сможет, получает 1 урон.", true, "Выберите соперника для дуэли", "/assets/cards/duel.png")
         },
         {
             CardType.Panic,
-            new CardDefinition("Panic!", CardType.Panic, CardCategory.Brown, "Steal a card from a player at distance 1 (hand or equipment).", true, "Pick a player to rob", "/assets/cards/panic.png")
+            new CardDefinition("Паника!", CardType.Panic, CardCategory.Brown, "Украдите карту у игрока на дистанции 1 (рука или снаряжение).", true, "Выберите игрока для кражи", "/assets/cards/panic.png")
         },
         {
             CardType.Saloon,
-            new CardDefinition("Saloon", CardType.Saloon, CardCategory.Brown, "All living players heal 1 HP.", false, null, "/assets/cards/saloon.png")
+            new CardDefinition("Салун", CardType.Saloon, CardCategory.Brown, "Все живые игроки восстанавливают 1 ОЗ.", false, null, "/assets/cards/saloon.png")
         },
         {
             CardType.WellsFargo,
-            new CardDefinition("Wells Fargo", CardType.WellsFargo, CardCategory.Brown, "Draw 3 cards.", false, null, "/assets/cards/wells_fargo.png")
+            new CardDefinition("Уэллс Фарго", CardType.WellsFargo, CardCategory.Brown, "Доберите 3 карты.", false, null, "/assets/cards/wells_fargo.png")
         },
         {
             CardType.GeneralStore,
-            new CardDefinition("General Store", CardType.GeneralStore, CardCategory.Brown, "Reveal cards equal to alive players. Each picks one in turn order.", false, null, "/assets/cards/general_store.png")
+            new CardDefinition("Магазин", CardType.GeneralStore, CardCategory.Brown, "Откройте карты по числу живых игроков. Каждый выбирает по очереди.", false, null, "/assets/cards/general_store.png")
         },
         {
             CardType.Barrel,
-            new CardDefinition("Barrel", CardType.Barrel, CardCategory.Blue, "When shot, 'draw!' \u2014 if Hearts, the shot is dodged.", false, null, "/assets/cards/barrel.png")
+            new CardDefinition("Бочка", CardType.Barrel, CardCategory.Blue, "При выстреле выполните «проверку»: если червы, выстрел избегается.", false, null, "/assets/cards/barrel.png")
         },
         {
             CardType.Mustang,
-            new CardDefinition("Mustang", CardType.Mustang, CardCategory.Blue, "Other players see you at distance +1.", false, null, "/assets/cards/mustang.png")
+            new CardDefinition("Мустанг", CardType.Mustang, CardCategory.Blue, "Другие видят вас на дистанции +1.", false, null, "/assets/cards/mustang.png")
         },
         {
             CardType.Scope,
-            new CardDefinition("Scope", CardType.Scope, CardCategory.Blue, "You see other players at distance -1.", false, null, "/assets/cards/scope.png")
+            new CardDefinition("Прицел", CardType.Scope, CardCategory.Blue, "Вы видите других на дистанции -1.", false, null, "/assets/cards/scope.png")
         },
         {
             CardType.Volcanic,
-            new CardDefinition("Volcanic", CardType.Volcanic, CardCategory.Weapon, "Weapon (range 1). You can play unlimited Bang! per turn.", false, null, "/assets/cards/volcanic.png")
+            new CardDefinition("Вулканик", CardType.Volcanic, CardCategory.Weapon, "Оружие (дальность 1). Можно играть Бах! без ограничения за ход.", false, null, "/assets/cards/volcanic.png")
         },
         {
             CardType.Schofield,
-            new CardDefinition("Schofield", CardType.Schofield, CardCategory.Weapon, "Weapon (range 2).", false, null, "/assets/cards/schofield.png")
+            new CardDefinition("Скофилд", CardType.Schofield, CardCategory.Weapon, "Оружие (дальность 2).", false, null, "/assets/cards/schofield.png")
         },
         {
             CardType.Remington,
-            new CardDefinition("Remington", CardType.Remington, CardCategory.Weapon, "Weapon (range 3).", false, null, "/assets/cards/remington.png")
+            new CardDefinition("Ремингтон", CardType.Remington, CardCategory.Weapon, "Оружие (дальность 3).", false, null, "/assets/cards/remington.png")
         },
         {
             CardType.RevCarabine,
-            new CardDefinition("Rev. Carabine", CardType.RevCarabine, CardCategory.Weapon, "Weapon (range 4).", false, null, "/assets/cards/rev_carabine.png")
+            new CardDefinition("Карабин", CardType.RevCarabine, CardCategory.Weapon, "Оружие (дальность 4).", false, null, "/assets/cards/rev_carabine.png")
         },
         {
             CardType.Winchester,
-            new CardDefinition("Winchester", CardType.Winchester, CardCategory.Weapon, "Weapon (range 5).", false, null, "/assets/cards/winchester.png")
+            new CardDefinition("Винчестер", CardType.Winchester, CardCategory.Weapon, "Оружие (дальность 5).", false, null, "/assets/cards/winchester.png")
         },
         {
             CardType.Jail,
-            new CardDefinition("Jail", CardType.Jail, CardCategory.Blue, "Play on another player. They must draw at turn start — skip turn on failure.", true, "Choose a player to jail", "/assets/cards/jail.png")
+            new CardDefinition("Тюрьма", CardType.Jail, CardCategory.Blue, "Сыграйте на другого игрока. В начале хода он делает проверку — при неудаче ход пропускается.", true, "Выберите игрока для тюрьмы", "/assets/cards/jail.png")
         },
         {
             CardType.Dynamite,
-            new CardDefinition("Dynamite", CardType.Dynamite, CardCategory.Blue, "Play on yourself. Passes between players. May explode for 3 damage.", false, null, "/assets/cards/dynamite.png")
+            new CardDefinition("Динамит", CardType.Dynamite, CardCategory.Blue, "Сыграйте на себя. Переходит между игроками. Может взорваться и нанести 3 урона.", false, null, "/assets/cards/dynamite.png")
         }
     };
 
@@ -2565,74 +2565,74 @@ static class CharacterLibrary
     private static readonly List<CharacterDefinition> Characters = new()
     {
         new CharacterDefinition(
-            "Lucky Duke",
+            "Лаки Дьюк",
             4,
-            "When you 'draw!', flip 2 cards and choose the best result.",
+            "При «проверке» откройте 2 карты и выберите лучший результат.",
             "/assets/characters/lucky_duke.png"),
         new CharacterDefinition(
-            "Slab the Killer",
+            "Слэб Убийца",
             4,
-            "Your Bang! cards deal 2 damage.",
+            "Ваши Бах! наносят 2 урона.",
             "/assets/characters/slab_the_killer.png"),
         new CharacterDefinition(
-            "El Gringo",
+            "Эль Гринго",
             3,
-            "When you take damage, draw a card from the attacker's hand.",
+            "При получении урона возьмите карту из руки атакующего.",
             "/assets/characters/el_gringo.png"),
         new CharacterDefinition(
-            "Suzy Lafayette",
+            "Сьюзи Лафайет",
             4,
-            "Whenever your hand becomes empty, draw 1 card.",
+            "Когда рука становится пустой, возьмите 1 карту.",
             "/assets/characters/suzy_lafayette.png"),
         new CharacterDefinition(
-            "Rose Doolan",
+            "Роуз Дулан",
             4,
-            "Built-in Scope: you see others at distance -1.",
+            "Встроенный Прицел: вы видите других на дистанции -1.",
             "/assets/characters/rose_doolan.png"),
         new CharacterDefinition(
-            "Jesse Jones",
+            "Джесси Джонс",
             4,
-            "Draw your first card from a chosen player's hand.",
+            "Первую карту берите из руки выбранного игрока.",
             "/assets/characters/jesse_jones.png"),
         new CharacterDefinition(
-            "Bart Cassidy",
+            "Барт Кэссиди",
             4,
-            "Each time you take damage, draw 1 card from the deck.",
+            "Каждый раз при получении урона берите 1 карту из колоды.",
             "/assets/characters/bart_cassidy.png"),
         new CharacterDefinition(
-            "Paul Regret",
+            "Пол Регрет",
             3,
-            "Built-in Mustang: others see you at distance +1.",
+            "Встроенный Мустанг: другие видят вас на дистанции +1.",
             "/assets/characters/paul_regret.png"),
         new CharacterDefinition(
-            "Calamity Janet",
+            "Каламити Джанет",
             4,
-            "You can use Bang! as Missed! and Missed! as Bang!.",
+            "Используйте Бах! как Мимо! и Мимо! как Бах!.",
             "/assets/characters/calamity_janet.png"),
         new CharacterDefinition(
-            "Kit Carlson",
+            "Кит Карлсон",
             4,
-            "Look at the top 3 cards, keep 2, put 1 back.",
+            "Посмотрите 3 верхние карты, оставьте 2, 1 верните.",
             "/assets/characters/kit_carlson.png"),
         new CharacterDefinition(
-            "Willy the Kid",
+            "Уилли Кид",
             4,
-            "You can play unlimited Bang! cards per turn.",
+            "Можно играть Бах! без ограничения за ход.",
             "/assets/characters/willy_the_kid.png"),
         new CharacterDefinition(
-            "Sid Ketchum",
+            "Сид Кетчум",
             4,
-            "Discard 2 cards to regain 1 HP (usable on your turn).",
+            "Сбросьте 2 карты, чтобы восстановить 1 ОЗ (в свой ход).",
             "/assets/characters/sid_ketchum.png"),
         new CharacterDefinition(
-            "Vulture Sam",
+            "Валчер Сэм",
             4,
-            "When a player is eliminated, you take all their cards.",
+            "Когда игрок устранён, вы забираете все его карты.",
             "/assets/characters/vulture_sam.png"),
         new CharacterDefinition(
-            "Pedro Ramirez",
+            "Педро Рамирес",
             4,
-            "Draw your first card from the top of the discard pile.",
+            "Первую карту берите с верхней карты сброса.",
             "/assets/characters/pedro_ramirez.png")
     };
 
