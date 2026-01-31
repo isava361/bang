@@ -1,276 +1,298 @@
-# Bang! Online — Анализ базы данных игры и улучшений
+# Bang! Online — Game Database & Improvement Analysis
 
-## 1. Обзор архитектуры данных
+## 1. Data Architecture Overview
 
-Игра **не использует постоянную базу данных**. Всё состояние хранится в памяти через
-синглтон `RoomManager`, зарегистрированный в контейнере DI ASP.NET Core. `RoomManager`
-владеет несколькими экземплярами `GameState`, по одному на комнату. Это означает:
+The game uses **no persistent database**. All state is held in-memory via a
+`RoomManager` singleton registered in the ASP.NET Core DI container. The
+`RoomManager` owns multiple `GameState` instances, one per room. This means:
 
-- Состояние игры теряется при перезапуске сервера.
-- Поддерживаются **несколько параллельных игровых комнат**, каждая с уникальным 4-символьным
-  кодом (например, `A3K9`).
-- Статистика игроков, история матчей и прогрессия не сохраняются.
-- **Переподключение поддерживается** через `localStorage`. `playerId` и
-  `bangRoomCode` сохраняются при входе и автоматически восстанавливаются при перезагрузке
-  страницы через эндпоинт `/api/reconnect`.
+- Game state is lost on server restart.
+- **Multiple concurrent game rooms** are supported, each with a unique 4-character
+  room code (e.g. `A3K9`).
+- No player statistics, match history, or progression are tracked.
+- **Reconnection is supported** via `localStorage`. The `playerId` and
+  `bangRoomCode` are saved on join and automatically restored on page reload
+  through the `/api/reconnect` endpoint.
 
-### Управление комнатами
+### Room Management
 
-| Структура | Тип | Назначение |
-| --- | --- | --- |
-| `RoomManager._rooms` | `Dictionary<string, GameState>` | Все комнаты, ключ — 4-символьный код |
-| `RoomManager._playerRoomMap` | `Dictionary<string, string>` | Сопоставление ID игрока и кода комнаты |
+| Structure | Type | Purpose |
+|-----------|------|---------|
+| `RoomManager._rooms` | `Dictionary<string, GameState>` | All rooms keyed by 4-char code |
+| `RoomManager._playerRoomMap` | `Dictionary<string, string>` | Player ID to room code mapping |
 
-Коды комнат используют однозначные символы (без `0/O/1/I`). Пустые комнаты
-автоматически удаляются после выхода последнего игрока/зрителя.
+Room codes use unambiguous characters (no `0/O/1/I`). Empty rooms are
+automatically cleaned up when the last player/spectator leaves.
 
-### Внутренние структуры данных в комнате
+### Per-Room In-Memory Data Structures
 
-| Структура | Тип | Назначение |
-| --- | --- | --- |
-| `_players` | `Dictionary<string, PlayerState>` | Все игроки, ключ — GUID |
-| `_spectators` | `HashSet<string>` | ID зрителей |
-| `_spectatorNames` | `Dictionary<string, string>` | Сопоставление ID зрителя и отображаемого имени |
-| `_turnOrder` | `List<string>` | Порядок хода (ID игроков) |
-| `_drawPile` | `Stack<Card>` | Оставшиеся карты для добора |
-| `_discardPile` | `List<Card>` | Сыгранные/сброшенные карты |
-| `_eventLog` | `List<string>` | Последние 20 игровых событий (прокручиваемый список) |
-| `_chatLog` | `List<string>` | Последние 30 сообщений чата (отдельно от событий) |
+| Structure | Type | Purpose |
+|-----------|------|---------|
+| `_players` | `Dictionary<string, PlayerState>` | All players keyed by GUID |
+| `_spectators` | `HashSet<string>` | Spectator player IDs |
+| `_spectatorNames` | `Dictionary<string, string>` | Spectator ID to display name |
+| `_turnOrder` | `List<string>` | Ordered player IDs for turn rotation |
+| `_drawPile` | `Stack<Card>` | Remaining cards to draw |
+| `_discardPile` | `List<Card>` | Played/discarded cards |
+| `_eventLog` | `List<string>` | Last 20 game events (scrollable) |
+| `_chatLog` | `List<string>` | Last 30 chat messages (separate from events) |
 
-Каждый `PlayerState` содержит `List<Card> InPlay` для экипированных синих/оружейных карт,
-а также список `Hand`.
+Each `PlayerState` has a `List<Card> InPlay` for equipped blue/weapon cards,
+in addition to the `Hand` list.
 
-### Журнал событий и чат
+### Event Log & Chat
 
-Игровые события и сообщения чата хранятся в **разных списках**. Журнал событий
-сохраняет последние 20 записей, а чат — последние 30. Оба отображаются
-в интерфейсе как прокручиваемые списки, с подсветкой последнего события.
-Зрители могут писать в чат (сообщения помечаются префиксом `[Зритель]`).
+Game events and chat messages are stored in **separate lists**. The event log
+keeps the last 20 entries and the chat log keeps the last 30. Both are rendered
+as scrollable lists in the frontend, with the most recent event highlighted.
+Spectators can chat (messages are prefixed with `[Spectator]`).
 
-## 2. Анализ базы карт
+---
 
-### Состав колоды (80 карт всего)
+## 2. Card Database Analysis
 
-Каждая карта имеет **масть** (Пики, Черви, Бубны, Трефы) и **значение**
-(2–A), которые назначаются случайно при сборке колоды. Они используются
-в механике проверки «потяните!» (Бочка, Динамит, Тюрьма).
+### Deck Composition (80 cards total)
 
-| Карта | Кол-во | % от колоды | Категория | Примечания |
-| --- | --- | --- | --- | --- |
-| Бах! | 22 | 27.5% | Коричневая | Основная атакующая карта |
-| Мимо! | 12 | 15.0% | Коричневая | Основная защитная карта |
-| Пиво | 6 | 7.5% | Коричневая | Отключена при <=2 игроках |
-| Дилижанс | 4 | 5.0% | Коричневая | Добор 2 карт |
-| Кэт Балу | 4 | 5.0% | Коричневая | Цель — рука или снаряжение |
-| Паника! | 4 | 5.0% | Коричневая | Дистанция 1; цель — рука или снаряжение |
-| Дуэль | 3 | 3.8% | Коричневая | По очереди сбрасываются Бах! |
-| Магазин | 3 | 3.8% | Коричневая | Открыть N карт, каждый берёт одну |
-| Гатлинг | 2 | 2.5% | Коричневая | Бьёт всех остальных игроков |
-| Индейцы! | 2 | 2.5% | Коричневая | Каждый сбрасывает Бах! или получает 1 урон |
-| Салун | 2 | 2.5% | Коричневая | Все живые игроки лечатся на 1 ОЗ |
-| Уэллс Фарго | 2 | 2.5% | Коричневая | Добор 3 карт |
-| Скофилд | 3 | 3.8% | Оружие | Дальность 2 |
-| Вулканик | 2 | 2.5% | Оружие | Дальность 1, безлимитные Бах! |
-| Ремингтон | 1 | 1.3% | Оружие | Дальность 3 |
-| Карабин | 1 | 1.3% | Оружие | Дальность 4 |
-| Винчестер | 1 | 1.3% | Оружие | Дальность 5 |
-| Бочка | 2 | 2.5% | Синяя | «Потяните!» — червы = уклонение |
-| Мустанг | 2 | 2.5% | Синяя | Дистанция до вас +1 |
-| Прицел | 1 | 1.3% | Синяя | Дистанция до других -1 |
-| Тюрьма | 1 | 1.3% | Синяя | «Потяните!» в начале хода — червы = побег, иначе пропуск хода |
-| Динамит | 1 | 1.3% | Синяя | «Потяните!» в начале хода — пики 2–9 = взрыв (3 урона), иначе передаётся |
+Every card has a **suit** (Spades, Hearts, Diamonds, Clubs) and a **value**
+(2--A), assigned randomly when the deck is built. These are used for the
+"draw!" check mechanic (Barrel, Dynamite, Jail).
 
-### Система масти/значения («Потяните!»)
+| Card | Count | % of Deck | Category | Notes |
+|------|-------|-----------|----------|-------|
+| Bang! | 22 | 27.5% | Brown | Primary attack card |
+| Missed! | 12 | 15.0% | Brown | Primary defense card |
+| Beer | 6 | 7.5% | Brown | Disabled when <=2 players remain |
+| Stagecoach | 4 | 5.0% | Brown | Draw 2 cards |
+| Cat Balou | 4 | 5.0% | Brown | Can target hand or equipment |
+| Panic! | 4 | 5.0% | Brown | Range 1; can target hand or equipment |
+| Duel | 3 | 3.8% | Brown | Alternate discarding Bang! cards |
+| General Store | 3 | 3.8% | Brown | Reveal N cards, each player picks one |
+| Gatling | 2 | 2.5% | Brown | Hits all other players |
+| Indians! | 2 | 2.5% | Brown | Each player discards Bang! or takes 1 damage |
+| Saloon | 2 | 2.5% | Brown | All living players heal 1 HP |
+| Wells Fargo | 2 | 2.5% | Brown | Draw 3 cards |
+| Schofield | 3 | 3.8% | Weapon | Range 2 |
+| Volcanic | 2 | 2.5% | Weapon | Range 1, unlimited Bang! |
+| Remington | 1 | 1.3% | Weapon | Range 3 |
+| Rev. Carabine | 1 | 1.3% | Weapon | Range 4 |
+| Winchester | 1 | 1.3% | Weapon | Range 5 |
+| Barrel | 2 | 2.5% | Blue | "Draw!" -- Hearts = dodge |
+| Mustang | 2 | 2.5% | Blue | Distance +1 to others |
+| Scope | 1 | 1.3% | Blue | Distance -1 to others |
+| Jail | 1 | 1.3% | Blue | "Draw!" at turn start -- Hearts = escape, else skip turn |
+| Dynamite | 1 | 1.3% | Blue | "Draw!" at turn start -- Spades 2-9 = explode (3 dmg), else pass |
 
-Механика «потяните!» открывает верхнюю карту колоды, проверяет масть и значение,
-затем сбрасывает её. Используется для:
+### Card Suit/Value System ("Draw!" Mechanic)
 
-- **Бочка**: червы = выстрел отражён.
-- **Динамит**: пики 2–9 = взрыв на 3 урона. Иначе передаётся по часовой стрелке.
-- **Тюрьма**: червы = побег и нормальная игра. Иначе ход пропускается.
-- **Лаки Дьюк**: вытягивает 2 карты для любой проверки и автоматически выбирает лучший результат.
+The "draw!" mechanic flips the top card of the draw pile, checks its suit and
+value, then discards it. This is used for:
 
-## 3. Анализ базы персонажей
+- **Barrel**: Hearts = shot dodged.
+- **Dynamite**: Spades 2--9 = explode for 3 damage. Otherwise passes clockwise.
+- **Jail**: Hearts = escape and play normally. Otherwise turn is skipped.
+- **Lucky Duke**: Draws 2 cards for any "draw!" check and the game
+  auto-selects the favorable result.
 
-### Способности персонажей (всего 14 уникальных)
+---
 
-| Персонаж | ОЗ | Способность | Примечания |
-| --- | --- | --- | --- |
-| Лаки Дьюк | 4 | «Потяните!» открывает 2 карты, выбирается лучший результат | Пассивная; влияет на Бочку, Динамит, Тюрьму |
-| Слэб Убийца | 4 | Бах! наносит 2 урона | Пассивная |
-| Эль Гринго | 3 | Тянет из руки атакующего при получении урона | Пассивная, за каждый урон |
-| Сьюзи Лафайет | 4 | Добирает 1 карту, когда рука пустеет | Триггер после любого расхода карт |
-| Роуз Дулан | 4 | Встроенный Прицел (дистанция -1) | Пассивная |
-| Джесси Джонс | 4 | Первая карта берётся из руки выбранного игрока | Требует выбора в фазе добора |
-| Барт Кэссиди | 4 | Добирает 1 карту из колоды при уроне | Пассивная, за каждый урон |
-| Пол Регрет | 3 | Встроенный Мустанг (дистанция +1) | Пассивная |
-| Каламити Джанет | 4 | Бах! <-> Мимо! взаимозаменяемы | Работает в атаке и защите |
-| Кит Карлсон | 4 | Посмотреть 3 верхние карты, оставить 2, 1 вернуть | Требует выбора в фазе добора |
-| Уилли Кид | 4 | Безлимитные Бах! за ход | Пассивная |
-| Сид Кетчум | 4 | Сбросьте 2 карты, чтобы восстановить 1 ОЗ | Активная способность через /api/ability |
-| Валчер Сэм | 4 | Забирает все карты выбывших игроков | Пассивная при смерти других |
-| Педро Рамирес | 4 | Первая карта берётся из сброса | Автоматически в фазе добора |
+## 3. Character Database Analysis
 
-## 4. Игровая логика
+### Character Abilities (all 14 unique)
 
-### Последовательность начала хода
+| Character | HP | Ability | Notes |
+|-----------|---:|--------|-------|
+| Lucky Duke | 4 | "Draw!" flips 2 cards, best result chosen | Passive; affects Barrel, Dynamite, Jail |
+| Slab the Killer | 4 | Bang! deals 2 damage | Passive |
+| El Gringo | 3 | Draw from attacker's hand when hit | Passive, per damage |
+| Suzy Lafayette | 4 | Draw 1 when hand empties | Triggers after any card consumption |
+| Rose Doolan | 4 | Built-in Scope (distance -1) | Passive |
+| Jesse Jones | 4 | First draw from a chosen player's hand | Draw phase pending action |
+| Bart Cassidy | 4 | Draw 1 from deck when hit | Passive, per damage |
+| Paul Regret | 3 | Built-in Mustang (distance +1) | Passive |
+| Calamity Janet | 4 | Bang! <-> Missed! interchangeable | Works in play and defense |
+| Kit Carlson | 4 | Look at top 3, keep 2, put 1 back | Draw phase pending action |
+| Willy the Kid | 4 | Unlimited Bang! per turn | Passive |
+| Sid Ketchum | 4 | Discard 2 cards to heal 1 HP | Active ability via /api/ability |
+| Vulture Sam | 4 | Take all cards from eliminated players | Passive on death |
+| Pedro Ramirez | 4 | First draw from discard pile | Automatic in draw phase |
 
-Каждый ход идёт в таком порядке:
+---
 
-1. **Проверка Динамита** — если у игрока есть Динамит в игре, выполняется проверка.
-   Пики 2–9 взрывают на 3 урона (Динамит сбрасывается). Иначе Динамит
-   передаётся следующему живому игроку по часовой стрелке. Если взрыв убивает
-   игрока, ход переходит к следующему игроку (он также делает проверки Динамита/Тюрьмы).
-2. **Проверка Тюрьмы** — если у игрока есть Тюрьма, выполняется проверка. Червы
-   означают побег (Тюрьма сбрасывается, игра продолжается). Иначе ход полностью
-   пропускается и переходит к следующему игроку.
-3. **Фаза добора** — добор карт в зависимости от персонажа (Джесси Джонс, Кит Карлсон,
-   Педро Рамирес или стандартный добор 2).
-4. **Фаза игры** — разыгрывание карт, использование способностей и т.д.
-5. **Фаза сброса** — если рука превышает ОЗ, сброс до лимита.
+## 4. Game Logic
 
-### Логика комнат и зрителей
+### Turn Start Sequence
 
-- **Вход в комнату** во время игры (или когда комната заполнена) добавляет
-  игрока как **зрителя**. Зрители видят состояние игры (карты игроков скрыты),
-  могут писать в чат (префикс `[Зритель]`), но не могут играть карты, начинать
-  игру, завершать ход или использовать способности.
-- **Выход в середине игры** устраняет игрока: его карты сбрасываются, зависшие
-  действия очищаются, и ход передаётся, если это был его ход.
-- **Новая игра** повышает зрителей до игроков (до 6). Остальные остаются зрителями.
-- **Пустые комнаты** автоматически удаляются после ухода последнего человека.
+Each turn follows this order:
 
-### Дополнительные заметки
+1. **Dynamite check** -- If the player has Dynamite in play, draw a check card.
+   Spades 2--9 explodes for 3 damage (Dynamite discarded). Otherwise Dynamite
+   passes to the next alive player clockwise. If the explosion kills the
+   player, the turn moves to the next player (who also gets Dynamite/Jail
+   checks).
+2. **Jail check** -- If the player has Jail in play, draw a check card. Hearts
+   means escape (Jail discarded, play normally). Otherwise the turn is
+   skipped entirely and advances to the next player.
+3. **Draw phase** -- Character-specific card drawing (Jesse Jones, Kit Carlson,
+   Pedro Ramirez, or default draw 2).
+4. **Play phase** -- Play cards, use abilities, etc.
+5. **Discard phase** -- If hand exceeds HP, discard down to HP limit.
 
-1. **Порядок хода — алфавитный** (`Program.cs`), а не по рассадке. Для упрощённой
-   версии это допустимо, но стоит помнить об этом.
+### Room & Spectator Logic
 
-### Граничные случаи победы
+- **Joining a room** while the game is in progress (or room is full) adds the
+  player as a **spectator**. Spectators see the game state (player cards hidden),
+  can chat (messages prefixed with `[Spectator]`), but cannot play cards, start
+  the game, end turns, or use abilities.
+- **Leaving mid-game** eliminates the player: their cards are discarded, pending
+  actions involving them are cleaned up, and the turn advances if it was their
+  turn.
+- **New Game** promotes spectators to players (up to 6). Overflow stays
+  spectating.
+- **Empty rooms** are automatically removed when the last person leaves.
 
-- Если Шериф погиб и живых Бандитов нет, но есть Ренегат, код проверяет
-  `alivePlayers.Count == 1 && renegadeAlive` — это корректно.
-- Однако если Шериф погиб, а Бандиты и Ренегат погибли одновременно (например, от Гатлинга),
-  сообщение говорит «Бандиты победили после падения Шерифа», хотя Бандитов нет.
-  Это формально соответствует правилам, но сообщение может сбивать с толку.
+### Remaining Notes
 
-## 5. Фронтенд / UX
+1. **Turn order is alphabetical** (`Program.cs`), not based on seating
+   position. This is fine for a simplified version but worth noting.
 
-### Реализовано
+### Win Condition Edge Cases
 
-- **Панель лобби** — ввод имени, затем создание или вход в комнату по коду. Список
-  комнат обновляется каждые 3 секунды и показывает количество игроков/зрителей
-  и статус игры.
-- **Несколько игровых комнат** — у каждой комнаты есть уникальный 4-символьный код,
-  показанный бейджем в заголовке панели игры.
-- **Кнопка выхода** — возвращает в лобби; уход во время игры устраняет игрока
-  и очищает зависшие действия.
-- **Режим зрителя** — синяя плашка («Вы наблюдаете за игрой»), кнопки действий
-  отключены, рука пустая. Зрители могут писать в чат и видеть журнал событий.
-- **Журнал событий** — прокручиваемый список последних 20 событий, с подсветкой
-  последнего события.
-- **Чат отделён от событий игры** — отдельный список сообщений над полем ввода,
-  независимый от журнала событий.
-- **Опрос каждые 1 секунду** — достаточно отзывчиво для казуальной игры.
-- **Переподключение через localStorage** — `playerId` и `bangRoomCode` сохраняются
-  при входе и автоматически восстанавливаются при перезагрузке через `/api/reconnect`.
-  При неудаче пользователь возвращается в лобби.
-- **Кнопка «Новая игра»** — появляется после окончания игры, вызывает `/api/newgame`.
-  Перед запуском повышает зрителей до игроков.
-- **Отображение масти/значения** — каждая карта в руке, экипировке и оверлеях
-  показывает символ масти и значение (например, `7`пика, `K`черви). Черви/Бубны
-  отображаются красным, Пики/Трефы — серым.
-- **Исправление отображения арт-иллюстраций** — изображения используют
-  `object-fit: contain` с `max-height: 260px`, чтобы весь арт был виден без обрезки.
+- If the Sheriff dies and no Bandits are alive but a Renegade is, the current
+  code checks `alivePlayers.Count == 1 && renegadeAlive` -- this is correct.
+- However, if the Sheriff dies and both Bandits and Renegade are dead
+  simultaneously (e.g., from Gatling), the message says "Bandits win after
+  the Sheriff falls" even though no bandits are alive. This is technically
+  correct by the official rules but the message is confusing.
 
-### Оставшиеся проблемы
+---
 
-1. **Нет анимации/уведомления раскрытия роли** при смерти игрока.
-2. **Нет визуальной обратной связи** на успешный розыгрыш карты — карта просто исчезает.
-3. Рассмотреть **WebSocket/SSE** для мгновенных обновлений вместо опроса.
+## 5. Frontend / UX
 
-## 6. Приоритетные предложения по улучшению
+### Implemented
 
-### Завершено
+- **Lobby panel** -- enter a name, then create or join rooms by code. Room
+  list auto-refreshes every 3 seconds showing player/spectator counts and
+  game status.
+- **Multiple game rooms** -- each room has a unique 4-character code displayed
+  as a badge in the game panel header.
+- **Leave button** -- returns to the lobby; mid-game departure eliminates the
+  player and cleans up pending actions.
+- **Spectator mode** -- blue banner ("You are spectating this game"), action
+  buttons disabled, empty hand. Spectators can still chat and view the event
+  log.
+- **Event history log** -- scrollable list of the last 20 game events, with
+  the most recent event highlighted.
+- **Chat separated from game events** -- dedicated chat message list above
+  the chat input, independent of the event log.
+- **Polling at 1-second intervals** -- responsive enough for casual play.
+- **Reconnection via localStorage** -- `playerId` and `bangRoomCode` saved on
+  join, auto-restored on page reload through `/api/reconnect`. Failed reconnect
+  falls back to the lobby.
+- **"New Game" button** -- appears when the game is over, calls `/api/newgame`.
+  Promotes spectators to players before starting.
+- **Card suit/value display** -- every card in hand, equipment, and overlays
+  shows its suit symbol and value (e.g. `7`spade, `K`heart). Hearts/Diamonds
+  are red, Spades/Clubs are gray.
+- **Card art fix** -- images use `object-fit: contain` with `max-height: 260px`
+  so the full artwork is visible without cropping.
 
-| # | Улучшение | Статус |
-| --- | --- | --- |
-| 1 | **Журнал событий** (последние 20, прокрутка) | Сделано |
-| 2 | **Разделение чата и событий игры** | Сделано |
-| 3 | **Поддержка переподключения** (localStorage + /api/reconnect) | Сделано |
-| 4 | **Кнопка «Новая игра»** после окончания | Сделано |
-| 5 | **Карта «Тюрьма»** с проверкой «потяните!» в начале хода | Сделано |
-| 6 | **Карта «Динамит»** с проверкой «потяните!», передачей и взрывом | Сделано |
-| 7 | **Система масти/значения** и «потяните!» для Бочки/Динамита/Тюрьмы | Сделано |
-| 8 | **Снижение частоты опроса** с 4с до 1с | Сделано |
-| 9 | **Несколько комнат** с RoomManager и кодами комнат | Сделано |
-| 10 | **Режим зрителя** для игроков, подключившихся в середине/при заполнении | Сделано |
-| 11 | **Выход/возврат** с устранением и возвратом в лобби | Сделано |
-| 12 | **Исправление отображения карт** (арт целиком, без обрезки) | Сделано |
+### Remaining Issues
 
-### В работе
+1. **No role reveal animation or notification** when a player dies.
+2. **No visual feedback** on card play success -- the card just disappears
+   from the hand.
+3. Consider **WebSocket/SSE** for instant updates instead of polling.
 
-| # | Улучшение | Влияние |
-| --- | --- | --- |
-| 1 | **Переход на WebSockets или SSE** для обновлений в реальном времени | Убирает задержки опроса |
-| 2 | **Добавить сохранение** (SQLite или JSON) для истории игр | Позволит статистику и повторы матчей |
-| 3 | **Анимация раскрытия роли** при смерти игрока | Визуальный полиш |
-| 4 | **Обратная связь на розыгрыш карты** (анимация или вспышка) | Визуальный полиш |
+---
 
-## 7. API эндпоинты
+## 6. Prioritized Improvement Suggestions
 
-### Управление комнатами
+### Completed
 
-| Метод | Эндпоинт | Тело | Описание |
-| --- | --- | --- | --- |
-| POST | `/api/room/create` | -- | Создаёт новую комнату, возвращает `{ roomCode }` |
-| GET | `/api/rooms` | -- | Список комнат с количеством игроков/зрителей и статусом |
-| POST | `/api/join` | `{ name, roomCode }` | Вход в комнату (игрок или зритель) |
-| POST | `/api/leave` | `{ playerId }` | Покинуть текущую комнату |
+| # | Improvement | Status |
+|---|-------------|--------|
+| 1 | **Event history log** (last 20 events, scrollable) | Done |
+| 2 | **Separate chat from game events** | Done |
+| 3 | **Reconnection support** (localStorage + /api/reconnect) | Done |
+| 4 | **"New Game" button** after game over | Done |
+| 5 | **Jail card** with "draw!" check at turn start | Done |
+| 6 | **Dynamite card** with "draw!" check, passing, and explosion | Done |
+| 7 | **Card suit/value system** and "draw!" mechanic for Barrel/Dynamite/Jail | Done |
+| 8 | **Polling reduced** from 4s to 1s | Done |
+| 9 | **Multiple game rooms** with RoomManager and room codes | Done |
+| 10 | **Spectator mode** for players joining mid-game or full rooms | Done |
+| 11 | **Leave/rejoin** with mid-game elimination and lobby fallback | Done |
+| 12 | **Card art fix** (full artwork visible, no cropping) | Done |
 
-### Игровой процесс
+### Remaining
 
-| Метод | Эндпоинт | Тело | Описание |
-| --- | --- | --- | --- |
-| POST | `/api/start` | `{ playerId }` | Запускает игру (зрителям запрещено) |
-| POST | `/api/play` | `{ playerId, cardIndex, targetId? }` | Сыграть карту из руки |
-| POST | `/api/respond` | `{ playerId, responseType, cardIndex?, targetId? }` | Ответить на действие |
-| POST | `/api/end` | `{ playerId }` | Завершить текущий ход |
-| POST | `/api/chat` | `{ playerId, text }` | Отправить сообщение (зрителям разрешено) |
-| POST | `/api/ability` | `{ playerId, cardIndices }` | Использовать способность (Сид Кетчум) |
-| POST | `/api/newgame` | `{ playerId }` | Сбросить игру (повышает зрителей) |
-| GET | `/api/reconnect` | `?playerId=` | Переподключение и возврат состояния |
-| GET | `/api/state` | `?playerId=` | Опрос текущего состояния |
+| # | Improvement | Impact |
+|---|-------------|--------|
+| 1 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay entirely |
+| 2 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
+| 3 | **Role reveal animation** on player death | Visual polish |
+| 4 | **Card play feedback** (animation or flash) | Visual polish |
 
-Все игровые эндпоинты ищут комнату через `RoomManager.GetRoomByPlayer()` и
-блокируют игровые действия для зрителей (кроме чата и новой игры).
+---
 
-## 8. Итоги
+## 7. API Endpoints
 
-Игра полностью реализует оригинальный набор карт Bang!: все 80 карт с мастью/значением,
-все 14 персонажей с уникальными способностями и полная механика «потяните!» для Бочки,
-Динамита и Тюрьмы.
+### Room Management
 
-**Основные механики:** система дистанции/дальности использует круговую рассадку,
-дальность оружия, Мустанг, Прицел и модификаторы персонажей. **Экипировка (синие карты)**
-остаётся в игре — Бочка использует «потяните!» (черви = уклонение), оружие задаёт дальность,
-Мустанг и Прицел меняют дистанцию, **Тюрьма** пропускает ход, если не вытянуты червы,
-а **Динамит** передаётся по часовой стрелке и взрывается на пиках 2–9, нанося 3 урона.
-**Кэт Балу и Паника!** могут нацеливаться на экипировку или руку. **Карты мёртвых игроков**
-обрабатываются корректно (сбрасываются или забираются Валчером Сэмом, штраф Шерифа за убийство
-помощника). **Лаки Дьюк** тянет 2 карты для любой проверки и автоматически выбирает лучший
-результат. **Роли раскрываются при смерти**, **Пиво отключено в 1v1**, и **самоцеливание заблокировано**.
+| Method | Endpoint | Body | Description |
+|--------|----------|------|-------------|
+| POST | `/api/room/create` | -- | Creates a new room, returns `{ roomCode }` |
+| GET | `/api/rooms` | -- | Lists all rooms with player/spectator counts and status |
+| POST | `/api/join` | `{ name, roomCode }` | Joins a room (as player or spectator) |
+| POST | `/api/leave` | `{ playerId }` | Leaves the current room |
 
-**Мультиплеерная инфраструктура:** **несколько комнат** с 4-символьными кодами,
-управляемых синглтоном `RoomManager`. Игроки, подключающиеся во время игры или в заполненную
-комнату, становятся **зрителями**, которые могут смотреть и писать в чат, но не играть.
-**Выход в середине игры** устраняет игрока и очищает зависшие действия.
-**Зрители повышаются до игроков** при начале новой игры (до 6). Пустые комнаты удаляются
-автоматически.
+### Gameplay
 
-**Качество жизни:** журнал событий (прокрутка, последние 20), отдельный чат (последние 30),
-переподключение через localStorage (с кодом комнаты), лобби со списком комнат, кнопка
-«Новая игра», опрос каждые 1 секунду, отображение масти/значения на всех картах и
-полное отображение арт-иллюстраций без обрезки.
+| Method | Endpoint | Body | Description |
+|--------|----------|------|-------------|
+| POST | `/api/start` | `{ playerId }` | Starts the game (blocked for spectators) |
+| POST | `/api/play` | `{ playerId, cardIndex, targetId? }` | Plays a card from hand |
+| POST | `/api/respond` | `{ playerId, responseType, cardIndex?, targetId? }` | Responds to a pending action |
+| POST | `/api/end` | `{ playerId }` | Ends the current turn |
+| POST | `/api/chat` | `{ playerId, text }` | Sends a chat message (spectators allowed) |
+| POST | `/api/ability` | `{ playerId, cardIndices }` | Uses character ability (Sid Ketchum) |
+| POST | `/api/newgame` | `{ playerId }` | Resets for a new game (promotes spectators) |
+| GET | `/api/reconnect` | `?playerId=` | Reconnects and returns current game state |
+| GET | `/api/state` | `?playerId=` | Polls current game state |
 
-**Оставшиеся улучшения:** WebSocket/SSE для мгновенных обновлений, сохранение истории,
-визуальный полиш (анимации смерти, обратная связь на розыгрыш карты).
+All gameplay endpoints look up the room via `RoomManager.GetRoomByPlayer()` and
+block spectators from game actions (except chat and newgame).
+
+---
+
+## 8. Summary
+
+The game has a **complete implementation of the original Bang! card set**
+including all 80 cards with suit/value, all 14 characters with unique abilities,
+and the full "draw!" check mechanic for Barrel, Dynamite, and Jail.
+
+**Core mechanics:** The **distance/range system** uses circular seating with
+weapon range, Mustang, Scope, and character modifiers. **Equipment (blue)
+cards** stay in play -- Barrel uses "draw!" (Hearts = dodge), weapons set range,
+Mustang and Scope modify distance, **Jail** skips a turn unless the player
+draws Hearts, and **Dynamite** passes clockwise and explodes on Spades 2--9
+for 3 damage. **Cat Balou and Panic!** can target equipment or hand cards.
+**Dead player cards** are properly handled (discarded or taken by Vulture Sam,
+Sheriff-kills-Deputy penalty). **Lucky Duke** draws 2 cards for any "draw!"
+check with the best result auto-selected. **Roles are revealed on death**,
+**Beer is disabled in 1v1**, and **self-targeting is blocked**.
+
+**Multiplayer infrastructure:** **Multiple game rooms** with 4-character codes,
+managed by a `RoomManager` singleton. Players joining a room mid-game or when
+the room is full become **spectators** who can watch and chat but not play.
+**Leave mid-game** eliminates the player and cleans up pending actions.
+**Spectators are promoted to players** when a new game starts (up to 6).
+Empty rooms are cleaned up automatically.
+
+**Quality of life:** Event history (scrollable, last 20), separate chat log
+(last 30), reconnection via localStorage (with room code), lobby with room
+browser, "New Game" button, 1-second polling, suit/value displayed on all
+cards, and full card art visible without cropping.
+
+**Remaining improvements:** WebSocket/SSE for real-time updates, persistence,
+and visual polish (death animations, card play feedback).
