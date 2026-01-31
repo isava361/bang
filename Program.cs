@@ -189,7 +189,9 @@ record CardView(
     string Description,
     bool RequiresTarget,
     string? TargetHint,
-    string ImagePath
+    string ImagePath,
+    string Suit,
+    int Value
 );
 
 record CommandResult(bool Success, string Message, GameStateView? State = null, string? PlayerId = null);
@@ -522,8 +524,6 @@ class GameState
             }
 
             AdvanceTurn();
-            var current = _players[_turnOrder[_turnIndex]];
-            AddEvent($"{current.Name}'s turn begins.");
             return new CommandResult(true, "Turn ended.", ToView(playerId));
         }
     }
@@ -832,8 +832,6 @@ class GameState
                         message = $"{responder.Name} discards {card.Name}. Hand limit reached.";
                         _pendingAction = null;
                         AdvanceTurn();
-                        var nextPlayer = _players[_turnOrder[_turnIndex]];
-                        AddEvent($"{nextPlayer.Name}'s turn begins.");
                     }
                     else
                     {
@@ -1067,12 +1065,12 @@ class GameState
                     p.Character.Description,
                     p.Character.PortraitPath,
                     p.Hand.Count,
-                    p.InPlay.Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath)).ToList()))
+                    p.InPlay.Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value)).ToList()))
                 .OrderBy(p => p.Name)
                 .ToList();
 
             var hand = viewer.Hand
-                .Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath))
+                .Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value))
                 .ToList();
 
             PendingActionView? pendingView = null;
@@ -1098,7 +1096,7 @@ class GameState
                 if (_pendingAction.RevealedCards != null)
                 {
                     revealedCards = _pendingAction.RevealedCards
-                        .Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath))
+                        .Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value))
                         .ToList();
                 }
 
@@ -1149,23 +1147,121 @@ class GameState
 
     private void AdvanceTurn()
     {
-        if (_turnOrder.Count == 0)
-        {
-            return;
-        }
+        if (_turnOrder.Count == 0) return;
 
         for (var i = 0; i < _turnOrder.Count; i++)
         {
             _turnIndex = (_turnIndex + 1) % _turnOrder.Count;
             var current = _players[_turnOrder[_turnIndex]];
-            if (!current.IsAlive)
+            if (current.IsAlive) break;
+        }
+
+        if (_turnOrder.Count == 0 || GameOver) return;
+        BeginTurn(_players[_turnOrder[_turnIndex]]);
+    }
+
+    private void BeginTurn(PlayerState current)
+    {
+        if (!current.IsAlive || GameOver) return;
+
+        current.ResetTurnFlags();
+
+        // 1. Dynamite check
+        var dynamite = current.InPlay.FirstOrDefault(c => c.Type == CardType.Dynamite);
+        if (dynamite != null)
+        {
+            current.InPlay.Remove(dynamite);
+            bool isLuckyDuke = current.Character.Name == "Lucky Duke";
+            bool explodes;
+
+            if (isLuckyDuke)
             {
-                continue;
+                var card1 = DrawCheckCard();
+                var card2 = DrawCheckCard();
+                bool e1 = card1.Suit == CardSuit.Spades && card1.Value >= 2 && card1.Value <= 9;
+                bool e2 = card2.Suit == CardSuit.Spades && card2.Value >= 2 && card2.Value <= 9;
+                explodes = e1 && e2;
+                AddEvent($"Dynamite draw! {current.Name} (Lucky Duke): {FormatCheckCard(card1)} and {FormatCheckCard(card2)}");
+            }
+            else
+            {
+                var check = DrawCheckCard();
+                explodes = check.Suit == CardSuit.Spades && check.Value >= 2 && check.Value <= 9;
+                AddEvent($"Dynamite draw! {current.Name}: {FormatCheckCard(check)}");
             }
 
-            current.ResetTurnFlags();
+            if (explodes)
+            {
+                _discardPile.Add(dynamite);
+                AddEvent($"BOOM! Dynamite explodes on {current.Name} for 3 damage!");
+                ApplyDamage(current, current, 3, "blown up by Dynamite");
+                if (GameOver) return;
+                if (!current.IsAlive)
+                {
+                    // RemoveFromTurnOrder already adjusted _turnIndex
+                    if (_turnOrder.Count == 0) return;
+                    var next = _players[_turnOrder[_turnIndex]];
+                    if (!next.IsAlive) return;
+                    BeginTurn(next);
+                    return;
+                }
+            }
+            else
+            {
+                var nextAliveId = GetNextAlivePlayerId(current.Id);
+                if (nextAliveId != null)
+                {
+                    var nextPlayer = _players[nextAliveId];
+                    nextPlayer.InPlay.Add(dynamite);
+                    AddEvent($"Dynamite fizzles and passes to {nextPlayer.Name}.");
+                }
+                else
+                {
+                    _discardPile.Add(dynamite);
+                }
+            }
+        }
+
+        // 2. Jail check
+        var jail = current.InPlay.FirstOrDefault(c => c.Type == CardType.Jail);
+        if (jail != null && current.IsAlive)
+        {
+            current.InPlay.Remove(jail);
+            _discardPile.Add(jail);
+            bool isLuckyDuke = current.Character.Name == "Lucky Duke";
+            bool escapes;
+
+            if (isLuckyDuke)
+            {
+                var card1 = DrawCheckCard();
+                var card2 = DrawCheckCard();
+                escapes = card1.Suit == CardSuit.Hearts || card2.Suit == CardSuit.Hearts;
+                AddEvent($"Jail draw! {current.Name} (Lucky Duke): {FormatCheckCard(card1)} and {FormatCheckCard(card2)}");
+            }
+            else
+            {
+                var check = DrawCheckCard();
+                escapes = check.Suit == CardSuit.Hearts;
+                AddEvent($"Jail draw! {current.Name}: {FormatCheckCard(check)}");
+            }
+
+            if (escapes)
+            {
+                AddEvent($"{current.Name} breaks out of Jail!");
+            }
+            else
+            {
+                AddEvent($"{current.Name} stays in Jail. Turn skipped.");
+                AdvanceTurn();
+                return;
+            }
+        }
+
+        // 3. Normal draw phase
+        if (current.IsAlive && !GameOver)
+        {
+            AddEvent($"{current.Name}'s turn begins.");
             HandleDrawPhase(current);
-            return;
         }
     }
 
@@ -1319,29 +1415,42 @@ class GameState
         _drawPile.Clear();
         _discardPile.Clear();
 
+        var suitValuePool = new List<(CardSuit Suit, int Value)>();
+        for (var round = 0; round < 2; round++)
+        {
+            foreach (var suit in AllSuits)
+            {
+                for (var value = 2; value <= 14; value++)
+                {
+                    suitValuePool.Add((suit, value));
+                }
+            }
+        }
+        var shuffledSV = new Queue<(CardSuit, int)>(suitValuePool.OrderBy(_ => _random.Next()));
+
         var cards = new List<Card>();
-        cards.AddRange(CreateCards(CardType.Bang, 22));
-        cards.AddRange(CreateCards(CardType.Missed, 12));
-        cards.AddRange(CreateCards(CardType.Beer, 6));
-        cards.AddRange(CreateCards(CardType.Gatling, 2));
-        cards.AddRange(CreateCards(CardType.Stagecoach, 4));
-        cards.AddRange(CreateCards(CardType.CatBalou, 4));
-        cards.AddRange(CreateCards(CardType.Indians, 2));
-        cards.AddRange(CreateCards(CardType.Duel, 3));
-        cards.AddRange(CreateCards(CardType.Panic, 4));
-        cards.AddRange(CreateCards(CardType.Saloon, 2));
-        cards.AddRange(CreateCards(CardType.WellsFargo, 2));
-        cards.AddRange(CreateCards(CardType.GeneralStore, 3));
-        cards.AddRange(CreateCards(CardType.Barrel, 2));
-        cards.AddRange(CreateCards(CardType.Mustang, 2));
-        cards.AddRange(CreateCards(CardType.Scope, 1));
-        cards.AddRange(CreateCards(CardType.Volcanic, 2));
-        cards.AddRange(CreateCards(CardType.Schofield, 3));
-        cards.AddRange(CreateCards(CardType.Remington, 1));
-        cards.AddRange(CreateCards(CardType.RevCarabine, 1));
-        cards.AddRange(CreateCards(CardType.Winchester, 1));
-        cards.AddRange(CreateCards(CardType.Jail, 1));
-        cards.AddRange(CreateCards(CardType.Dynamite, 1));
+        cards.AddRange(CreateCards(CardType.Bang, 22, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Missed, 12, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Beer, 6, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Gatling, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Stagecoach, 4, shuffledSV));
+        cards.AddRange(CreateCards(CardType.CatBalou, 4, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Indians, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Duel, 3, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Panic, 4, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Saloon, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.WellsFargo, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.GeneralStore, 3, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Barrel, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Mustang, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Scope, 1, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Volcanic, 2, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Schofield, 3, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Remington, 1, shuffledSV));
+        cards.AddRange(CreateCards(CardType.RevCarabine, 1, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Winchester, 1, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Jail, 1, shuffledSV));
+        cards.AddRange(CreateCards(CardType.Dynamite, 1, shuffledSV));
 
         foreach (var card in cards.OrderBy(_ => _random.Next()))
         {
@@ -1392,6 +1501,59 @@ class GameState
         _discardPile.Clear();
     }
 
+    private static string FormatCardValue(int value)
+    {
+        return value switch
+        {
+            11 => "J",
+            12 => "Q",
+            13 => "K",
+            14 => "A",
+            _ => value.ToString()
+        };
+    }
+
+    private static string FormatCheckCard(Card card)
+    {
+        var suitSymbol = card.Suit switch
+        {
+            CardSuit.Spades => "\u2660",
+            CardSuit.Hearts => "\u2665",
+            CardSuit.Diamonds => "\u2666",
+            CardSuit.Clubs => "\u2663",
+            _ => "?"
+        };
+        return $"{FormatCardValue(card.Value)}{suitSymbol}";
+    }
+
+    private Card DrawCheckCard()
+    {
+        if (_drawPile.Count == 0) ReshuffleDiscardIntoDraw();
+        if (_drawPile.Count == 0)
+        {
+            return new Card("Check", CardType.Bang, CardCategory.Brown, "", false, null, "", CardSuit.Clubs, 10);
+        }
+        var card = _drawPile.Pop();
+        _discardPile.Add(card);
+        return card;
+    }
+
+    private string? GetNextAlivePlayerId(string currentPlayerId)
+    {
+        var currentIndex = _turnOrder.IndexOf(currentPlayerId);
+        if (currentIndex == -1) return null;
+        for (var i = 1; i < _turnOrder.Count; i++)
+        {
+            var idx = (currentIndex + i) % _turnOrder.Count;
+            var id = _turnOrder[idx];
+            if (_players[id].IsAlive && id != currentPlayerId)
+            {
+                return id;
+            }
+        }
+        return null;
+    }
+
     private void CheckSuzyLafayette(PlayerState player)
     {
         if (player.Character.Name == "Suzy Lafayette" && player.IsAlive && player.Hand.Count == 0)
@@ -1403,8 +1565,20 @@ class GameState
     private bool CheckBarrel(PlayerState target)
     {
         if (!target.InPlay.Any(c => c.Type == CardType.Barrel)) return false;
-        var chance = target.Character.Name == "Lucky Duke" ? 50 : 25;
-        return _random.Next(100) < chance;
+
+        if (target.Character.Name == "Lucky Duke")
+        {
+            var card1 = DrawCheckCard();
+            var card2 = DrawCheckCard();
+            var success = card1.Suit == CardSuit.Hearts || card2.Suit == CardSuit.Hearts;
+            AddEvent($"Barrel draw! {target.Name} (Lucky Duke): {FormatCheckCard(card1)} and {FormatCheckCard(card2)} \u2014 {(success ? "dodged!" : "no luck.")}");
+            return success;
+        }
+
+        var check = DrawCheckCard();
+        var result = check.Suit == CardSuit.Hearts;
+        AddEvent($"Barrel draw! {target.Name}: {FormatCheckCard(check)} \u2014 {(result ? "dodged!" : "no luck.")}");
+        return result;
     }
 
     private string ResolveBang(PlayerState attacker, PlayerState target)
@@ -1738,11 +1912,14 @@ class GameState
         return $"{attacker.Name} {verb} {target.Name} for {damage} damage.";
     }
 
-    private IEnumerable<Card> CreateCards(CardType type, int count)
+    private static readonly CardSuit[] AllSuits = { CardSuit.Spades, CardSuit.Hearts, CardSuit.Diamonds, CardSuit.Clubs };
+
+    private IEnumerable<Card> CreateCards(CardType type, int count, Queue<(CardSuit Suit, int Value)> suitValues)
     {
         var definition = CardLibrary.Get(type);
         for (var i = 0; i < count; i++)
         {
+            var sv = suitValues.Dequeue();
             yield return new Card(
                 definition.Name,
                 definition.Type,
@@ -1750,7 +1927,9 @@ class GameState
                 definition.Description,
                 definition.RequiresTarget,
                 definition.TargetHint,
-                definition.ImagePath);
+                definition.ImagePath,
+                sv.Suit,
+                sv.Value);
         }
     }
 
@@ -1906,7 +2085,7 @@ class PlayerState
     }
 }
 
-record Card(string Name, CardType Type, CardCategory Category, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
+record Card(string Name, CardType Type, CardCategory Category, string Description, bool RequiresTarget, string? TargetHint, string ImagePath, CardSuit Suit, int Value);
 
 record CardDefinition(string Name, CardType Type, CardCategory Category, string Description, bool RequiresTarget, string? TargetHint, string ImagePath);
 
@@ -1941,6 +2120,14 @@ enum CardCategory
     Brown,
     Blue,
     Weapon
+}
+
+enum CardSuit
+{
+    Spades,
+    Hearts,
+    Diamonds,
+    Clubs
 }
 
 enum Role
@@ -2041,7 +2228,7 @@ static class CardLibrary
         },
         {
             CardType.Barrel,
-            new CardDefinition("Barrel", CardType.Barrel, CardCategory.Blue, "25% chance to automatically dodge a shot (50% for Lucky Duke).", false, null, "/assets/cards/barrel.png")
+            new CardDefinition("Barrel", CardType.Barrel, CardCategory.Blue, "When shot, 'draw!' \u2014 if Hearts, the shot is dodged.", false, null, "/assets/cards/barrel.png")
         },
         {
             CardType.Mustang,
@@ -2093,7 +2280,7 @@ static class CharacterLibrary
         new CharacterDefinition(
             "Lucky Duke",
             4,
-            "Barrel checks succeed 50% instead of 25%.",
+            "When you 'draw!', flip 2 cards and choose the best result.",
             "/assets/characters/lucky_duke.png"),
         new CharacterDefinition(
             "Slab the Killer",

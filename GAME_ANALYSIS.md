@@ -8,8 +8,9 @@ The game uses **no persistent database**. All state is held in-memory via a sing
 - Game state is lost on server restart.
 - Only one game room exists at a time.
 - No player statistics, match history, or progression are tracked.
-- No reconnection support — if a player's browser tab closes, they lose their
-  `playerId` and cannot rejoin.
+- ~~No reconnection support~~ — **Reconnection is now supported** via
+  `localStorage`. The `playerId` is saved on join and automatically restored
+  on page reload through the `/api/reconnect` endpoint.
 
 ### In-Memory Data Structures
 
@@ -19,53 +20,63 @@ The game uses **no persistent database**. All state is held in-memory via a sing
 | `_turnOrder` | `List<string>` | Ordered player IDs for turn rotation |
 | `_drawPile` | `Stack<Card>` | Remaining cards to draw |
 | `_discardPile` | `List<Card>` | Played/discarded cards |
-| `LastEvent` | `string?` | Only the most recent event (no history) |
+| `_eventLog` | `List<string>` | Last 20 game events (scrollable) |
+| `_chatLog` | `List<string>` | Last 30 chat messages (separate from events) |
 
 Each `PlayerState` now has a `List<Card> InPlay` for equipped blue/weapon cards,
 in addition to the `Hand` list.
 
-### Key Limitation: No Event Log
+### Event Log & Chat
 
-Only a single `LastEvent` string is stored. Chat messages also overwrite this field,
-meaning a chat message can hide a game action. There is no scrollable event history.
+Game events and chat messages are stored in **separate lists**. The event log
+keeps the last 20 entries and the chat log keeps the last 30. Both are rendered
+as scrollable lists in the frontend, with the most recent event highlighted.
 
 ---
 
 ## 2. Card Database Analysis
 
-### Deck Composition (82 cards total)
+### Deck Composition (80 cards total)
+
+Every card has a **suit** (Spades, Hearts, Diamonds, Clubs) and a **value**
+(2–A), assigned randomly when the deck is built. These are used for the
+"draw!" check mechanic (Barrel, Dynamite, Jail).
 
 | Card | Count | % of Deck | Category | Notes |
 |------|-------|-----------|----------|-------|
-| Bang! | 22 | 26.8% | Brown | Primary attack card |
-| Missed! | 12 | 14.6% | Brown | Primary defense card |
-| Beer | 6 | 7.3% | Brown | Disabled when ≤2 players remain |
-| Stagecoach | 4 | 4.9% | Brown | OK |
-| Cat Balou | 4 | 4.9% | Brown | Can target hand or equipment |
-| Panic! | 4 | 4.9% | Brown | Range 1; can target hand or equipment |
-| Duel | 3 | 3.7% | Brown | OK |
-| General Store | 3 | 3.7% | Brown | OK |
-| Gatling | 2 | 2.4% | Brown | OK |
-| Indians! | 2 | 2.4% | Brown | OK |
-| Saloon | 2 | 2.4% | Brown | OK |
-| Wells Fargo | 2 | 2.4% | Brown | OK |
-| Schofield | 3 | 3.7% | Weapon | Range 2 |
-| Volcanic | 2 | 2.4% | Weapon | Range 1, unlimited Bang! |
-| Remington | 1 | 1.2% | Weapon | Range 3 |
-| Rev. Carabine | 1 | 1.2% | Weapon | Range 4 |
-| Winchester | 1 | 1.2% | Weapon | Range 5 |
-| Barrel | 2 | 2.4% | Blue | 25%/50% auto-dodge |
-| Mustang | 2 | 2.4% | Blue | Distance +1 to others |
-| Scope | 1 | 1.2% | Blue | Distance -1 to others |
+| Bang! | 22 | 27.5% | Brown | Primary attack card |
+| Missed! | 12 | 15.0% | Brown | Primary defense card |
+| Beer | 6 | 7.5% | Brown | Disabled when ≤2 players remain |
+| Stagecoach | 4 | 5.0% | Brown | Draw 2 cards |
+| Cat Balou | 4 | 5.0% | Brown | Can target hand or equipment |
+| Panic! | 4 | 5.0% | Brown | Range 1; can target hand or equipment |
+| Duel | 3 | 3.8% | Brown | Alternate discarding Bang! cards |
+| General Store | 3 | 3.8% | Brown | Reveal N cards, each player picks one |
+| Gatling | 2 | 2.5% | Brown | Hits all other players |
+| Indians! | 2 | 2.5% | Brown | Each player discards Bang! or takes 1 damage |
+| Saloon | 2 | 2.5% | Brown | All living players heal 1 HP |
+| Wells Fargo | 2 | 2.5% | Brown | Draw 3 cards |
+| Schofield | 3 | 3.8% | Weapon | Range 2 |
+| Volcanic | 2 | 2.5% | Weapon | Range 1, unlimited Bang! |
+| Remington | 1 | 1.3% | Weapon | Range 3 |
+| Rev. Carabine | 1 | 1.3% | Weapon | Range 4 |
+| Winchester | 1 | 1.3% | Weapon | Range 5 |
+| Barrel | 2 | 2.5% | Blue | "Draw!" — Hearts = dodge |
+| Mustang | 2 | 2.5% | Blue | Distance +1 to others |
+| Scope | 1 | 1.3% | Blue | Distance -1 to others |
+| Jail | 1 | 1.3% | Blue | "Draw!" at turn start — Hearts = escape, else skip turn |
+| Dynamite | 1 | 1.3% | Blue | "Draw!" at turn start — Spades 2–9 = explode (3 dmg), else pass |
 
-### Missing Card Types (from the original Bang! game)
+### Card Suit/Value System ("Draw!" Mechanic)
 
-**Blue (equipment) cards not yet implemented:**
-- **Jail** — Skip a player's turn unless they "draw" their way out.
-- **Dynamite** — Passes between players and may explode.
+The "draw!" mechanic flips the top card of the draw pile, checks its suit and
+value, then discards it. This is used for:
 
-**Other missing action cards:**
-- **Dodge** (from expansions)
+- **Barrel**: Hearts = shot dodged.
+- **Dynamite**: Spades 2–9 = explode for 3 damage. Otherwise passes clockwise.
+- **Jail**: Hearts = escape and play normally. Otherwise turn is skipped.
+- **Lucky Duke**: Draws 2 cards for any "draw!" check and the game
+  auto-selects the favorable result.
 
 ---
 
@@ -75,7 +86,7 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 
 | Character | HP | Ability | Notes |
 |-----------|---:|--------|-------|
-| Lucky Duke | 4 | Barrel checks succeed 50% instead of 25% | Passive |
+| Lucky Duke | 4 | "Draw!" flips 2 cards, best result chosen | Passive; affects Barrel, Dynamite, Jail |
 | Slab the Killer | 4 | Bang! deals 2 damage | Passive |
 | El Gringo | 3 | Draw from attacker's hand when hit | Passive, per damage |
 | Suzy Lafayette | 4 | Draw 1 when hand empties | Triggers after any card consumption |
@@ -92,15 +103,29 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 
 ---
 
-## 4. Game Logic Issues
+## 4. Game Logic
 
-### Remaining Issues
+### Turn Start Sequence
+
+Each turn follows this order:
+
+1. **Dynamite check** — If the player has Dynamite in play, draw a check card.
+   Spades 2–9 explodes for 3 damage (Dynamite discarded). Otherwise Dynamite
+   passes to the next alive player clockwise. If the explosion kills the
+   player, the turn moves to the next player (who also gets Dynamite/Jail
+   checks).
+2. **Jail check** — If the player has Jail in play, draw a check card. Hearts
+   means escape (Jail discarded, play normally). Otherwise the turn is
+   skipped entirely and advances to the next player.
+3. **Draw phase** — Character-specific card drawing (Jesse Jones, Kit Carlson,
+   Pedro Ramirez, or default draw 2).
+4. **Play phase** — Play cards, use abilities, etc.
+5. **Discard phase** — If hand exceeds HP, discard down to HP limit.
+
+### Remaining Notes
 
 1. **Turn order is alphabetical** (`Program.cs`), not based on seating
    position. This is fine for a simplified version but worth noting.
-
-2. **Jail and Dynamite** are not yet implemented. These are the two remaining
-   blue cards from the original game.
 
 ### Win Condition Edge Cases
 
@@ -113,55 +138,78 @@ meaning a chat message can hide a game action. There is no scrollable event hist
 
 ---
 
-## 5. Frontend / UX Issues
+## 5. Frontend / UX
 
-1. **Polling at 4-second intervals** (`app.js`): Feels sluggish in a
-   real-time game. Consider reducing to 1-2 seconds or switching to
-   WebSocket/Server-Sent Events for instant updates.
+### Implemented
 
-2. **Only last event visible** — no scrollable event log. Players miss what
-   happened if they weren't watching at the exact moment.
+- **Event history log** — scrollable list of the last 20 game events, with
+  the most recent event highlighted.
+- **Chat separated from game events** — dedicated chat message list above
+  the chat input, independent of the event log.
+- **Polling at 1-second intervals** — responsive enough for casual play.
+- **Reconnection via localStorage** — `playerId` saved on join, auto-restored
+  on page reload through `/api/reconnect`.
+- **"New Game" button** — appears when the game is over, calls `/api/newgame`.
+- **Card suit/value display** — every card in hand, equipment, and overlays
+  shows its suit symbol and value (e.g. `7♠`, `K♥`). Hearts/Diamonds are
+  red, Spades/Clubs are gray.
 
-3. **Chat overwrites game events** — sending a chat message replaces the
-   `LastEvent` string on the server, so other players see the chat instead
-   of the last game action.
+### Remaining Issues
 
-4. **No role reveal animation or notification** when a player dies.
-
-5. **No visual feedback** on card play success — the card just disappears
+1. **No role reveal animation or notification** when a player dies.
+2. **No visual feedback** on card play success — the card just disappears
    from the hand.
-
-6. **No "new game" button** after game over — players must refresh and rejoin.
+3. Consider **WebSocket/SSE** for instant updates instead of polling.
 
 ---
 
 ## 6. Prioritized Improvement Suggestions
 
-### Priority 1 — Quality of Life
+### Completed
+
+| # | Improvement | Status |
+|---|-------------|--------|
+| 1 | **Event history log** (last 20 events, scrollable) | Done |
+| 2 | **Separate chat from game events** | Done |
+| 3 | **Reconnection support** (localStorage + /api/reconnect) | Done |
+| 4 | **"New Game" button** after game over | Done |
+| 5 | **Jail card** with "draw!" check at turn start | Done |
+| 6 | **Dynamite card** with "draw!" check, passing, and explosion | Done |
+| 7 | **Card suit/value system** and "draw!" mechanic for Barrel/Dynamite/Jail | Done |
+| 8 | **Polling reduced** from 4s to 1s | Done |
+
+### Remaining
 
 | # | Improvement | Impact |
 |---|-------------|--------|
-| 1 | **Add event history log** (store last N events, not just one) | Players can catch up on what happened |
-| 2 | **Separate chat from game events** | Prevents chat from hiding game actions |
-| 3 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay |
-| 4 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
-| 5 | **Add reconnection support** (store playerId in localStorage) | Prevents losing session on page refresh |
-| 6 | **Support multiple game rooms** | Allows concurrent games |
-| 7 | **Add "New Game" button** after game over | Avoids manual server restart |
-| 8 | **Add Jail and Dynamite** blue cards | Completes the original card set |
+| 1 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay entirely |
+| 2 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
+| 3 | **Support multiple game rooms** | Allows concurrent games |
+| 4 | **Role reveal animation** on player death | Visual polish |
+| 5 | **Card play feedback** (animation or flash) | Visual polish |
 
 ---
 
 ## 7. Summary
 
-The game now has a comprehensive implementation of the core Bang! mechanics.
-All 14 characters have **unique, faithful abilities** matching the original
-game. The **distance/range system** uses circular seating with weapon range,
-Mustang, Scope, and character modifiers. **Equipment (blue) cards** stay in
-play in front of players — Barrel provides auto-dodge, weapons set range,
-Mustang and Scope modify distance. **Cat Balou and Panic!** can target
-equipment or hand cards. **Dead player cards** are properly handled (discarded
-or taken by Vulture Sam, Sheriff-kills-Deputy penalty). **Roles are revealed
-on death**, **Beer is disabled in 1v1**, and **self-targeting is blocked**.
-The remaining improvements are quality-of-life: event history, chat separation,
-real-time updates, persistence, reconnection, multiple rooms, and new game flow.
+The game has a **complete implementation of the original Bang! card set**
+including all 80 cards with suit/value, all 14 characters with unique abilities,
+and the full "draw!" check mechanic for Barrel, Dynamite, and Jail.
+
+**Core mechanics:** The **distance/range system** uses circular seating with
+weapon range, Mustang, Scope, and character modifiers. **Equipment (blue)
+cards** stay in play — Barrel uses "draw!" (Hearts = dodge), weapons set range,
+Mustang and Scope modify distance, **Jail** skips a turn unless the player
+draws Hearts, and **Dynamite** passes clockwise and explodes on Spades 2–9
+for 3 damage. **Cat Balou and Panic!** can target equipment or hand cards.
+**Dead player cards** are properly handled (discarded or taken by Vulture Sam,
+Sheriff-kills-Deputy penalty). **Lucky Duke** draws 2 cards for any "draw!"
+check with the best result auto-selected. **Roles are revealed on death**,
+**Beer is disabled in 1v1**, and **self-targeting is blocked**.
+
+**Quality of life:** Event history (scrollable, last 20), separate chat log
+(last 30), reconnection via localStorage, "New Game" button, 1-second polling,
+and suit/value displayed on all cards.
+
+**Remaining improvements:** WebSocket/SSE for real-time updates, persistence,
+multiple game rooms, and visual polish (death animations, card play feedback).

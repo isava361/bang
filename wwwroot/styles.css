@@ -222,6 +222,12 @@ button:disabled {
   pointer-events: none;
 }
 
+.suit-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-left: 0.3rem;
+}
+
 .event-log {
   margin-top: 1.5rem;
   padding: 1rem;
@@ -229,8 +235,41 @@ button:disabled {
   background: rgba(24, 24, 32, 0.9);
 }
 
+.event-list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+
+.event-entry {
+  margin: 0;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+  color: #d4d4de;
+}
+
+.event-entry:first-child {
+  color: #f2f2f5;
+  font-weight: 600;
+}
+
 .chat {
   margin-top: 1.5rem;
+}
+
+.chat-list {
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+}
+
+.chat-entry {
+  margin: 0;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+  color: #c7c7d1;
 }
 
 .chat-row {

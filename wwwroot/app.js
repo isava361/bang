@@ -36,6 +36,24 @@ let currentState = null;
 let selectedCard = null;
 let abilitySelectedIndices = [];
 
+const suitSymbols = { Spades: "\u2660", Hearts: "\u2665", Diamonds: "\u2666", Clubs: "\u2663" };
+const suitColors = { Spades: "#a0a0b0", Hearts: "#e04040", Diamonds: "#e04040", Clubs: "#a0a0b0" };
+
+const formatCardValue = (value) => {
+  if (value === 11) return "J";
+  if (value === 12) return "Q";
+  if (value === 13) return "K";
+  if (value === 14) return "A";
+  return value.toString();
+};
+
+const formatSuitValue = (card) => {
+  if (!card.suit) return "";
+  const sym = suitSymbols[card.suit] || "?";
+  const val = formatCardValue(card.value);
+  return `${val}${sym}`;
+};
+
 const cardsReference = [
   {
     name: "Bang!",
@@ -112,7 +130,7 @@ const cardsReference = [
   {
     name: "Barrel",
     type: "Barrel",
-    description: "25% chance to auto-dodge shots (50% for Lucky Duke).",
+    description: "When shot, 'draw!' \u2014 if Hearts, the shot is dodged.",
     imagePath: "/assets/cards/barrel.png",
   },
   {
@@ -162,7 +180,7 @@ const cardsReference = [
 const charactersReference = [
   {
     name: "Lucky Duke",
-    description: "Barrel checks succeed 50% instead of 25%.",
+    description: "When you 'draw!', flip 2 cards and choose the best result.",
     portraitPath: "/assets/characters/lucky_duke.png",
   },
   {
@@ -331,7 +349,10 @@ const updateState = (state) => {
       : "";
 
     const equipHtml = player.equipment && player.equipment.length > 0
-      ? player.equipment.map((e) => `<span class="equip-tag">${e.name}</span>`).join(" ")
+      ? player.equipment.map((e) => {
+          const sv = e.suit ? ` ${formatSuitValue(e)}` : "";
+          return `<span class="equip-tag">${e.name}${sv}</span>`;
+        }).join(" ")
       : "";
 
     const distanceHtml = state.distances && state.distances[player.id] != null
@@ -380,10 +401,13 @@ const updateState = (state) => {
     const categoryTag = card.category === "Blue" || card.category === "Weapon"
       ? `<span class="tag equip">${card.category}</span>`
       : "";
+    const suitValueLabel = card.suit
+      ? `<span class="suit-badge" style="color:${suitColors[card.suit] || '#fff'}">${formatSuitValue(card)}</span>`
+      : "";
     element.innerHTML = `
       <div>
         ${imageHtml}
-        <strong>${card.name}</strong>
+        <strong>${card.name} ${suitValueLabel}</strong>
         <small>${card.description}</small>
       </div>
       <div>
@@ -501,7 +525,8 @@ const showResponseOverlay = (pendingAction, state) => {
       pendingAction.revealedCards.forEach((card, idx) => {
         const button = document.createElement("button");
         button.className = "target-button";
-        button.textContent = card.name;
+        const sv = card.suit ? ` ${formatSuitValue(card)}` : "";
+        button.textContent = `${card.name}${sv}`;
         button.addEventListener("click", () => respondToAction("play_card", idx));
         responseCards.appendChild(button);
       });
@@ -512,7 +537,8 @@ const showResponseOverlay = (pendingAction, state) => {
     state.yourHand.forEach((card, idx) => {
       const button = document.createElement("button");
       button.className = "target-button";
-      button.textContent = card.name;
+      const sv = card.suit ? ` ${formatSuitValue(card)}` : "";
+      button.textContent = `${card.name}${sv}`;
       button.addEventListener("click", () => respondToAction("play_card", idx));
       responseCards.appendChild(button);
     });
@@ -530,7 +556,8 @@ const showResponseOverlay = (pendingAction, state) => {
       pendingAction.revealedCards.forEach((card, idx) => {
         const button = document.createElement("button");
         button.className = "target-button";
-        button.textContent = `Equipment: ${card.name}`;
+        const sv = card.suit ? ` ${formatSuitValue(card)}` : "";
+        button.textContent = `Equipment: ${card.name}${sv}`;
         button.addEventListener("click", () => respondToAction("equipment", idx));
         responseCards.appendChild(button);
       });
@@ -677,7 +704,8 @@ const showAbilityOverlay = () => {
   currentState.yourHand.forEach((card, idx) => {
     const button = document.createElement("button");
     button.className = "target-button";
-    button.textContent = card.name;
+    const sv = card.suit ? ` ${formatSuitValue(card)}` : "";
+    button.textContent = `${card.name}${sv}`;
     button.addEventListener("click", () => {
       if (abilitySelectedIndices.includes(idx)) {
         abilitySelectedIndices = abilitySelectedIndices.filter((i) => i !== idx);

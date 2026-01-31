@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "jwzFM/s3vV++U3kNB1nqnPl7bCUQVISQBtmVdhTBZmo=",
+  "Hash": "eiz2BeJD16/d70Dx1D36q7sziQIlrVVa7Zhqj1vNgtM=",
   "Source": "BangOnline",
   "BasePath": "_content/BangOnline",
   "Mode": "Default",
@@ -53,25 +53,6 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\assets\\backgrounds\\table.jpg"
-    },
-    {
-      "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\a",
-      "SourceId": "BangOnline",
-      "SourceType": "Discovered",
-      "ContentRoot": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\",
-      "BasePath": "_content/BangOnline",
-      "RelativePath": "assets/cards/a",
-      "AssetKind": "All",
-      "AssetMode": "All",
-      "AssetRole": "Primary",
-      "AssetMergeBehavior": "PreferTarget",
-      "AssetMergeSource": "",
-      "RelatedAsset": "",
-      "AssetTraitName": "",
-      "AssetTraitValue": "",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "wwwroot\\assets\\cards\\a"
     },
     {
       "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\bang.png",
@@ -169,6 +150,25 @@
       "OriginalItemSpec": "wwwroot\\assets\\cards\\duel.png"
     },
     {
+      "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\dynamite.png",
+      "SourceId": "BangOnline",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\",
+      "BasePath": "_content/BangOnline",
+      "RelativePath": "assets/cards/dynamite.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\assets\\cards\\dynamite.png"
+    },
+    {
       "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\gatling.png",
       "SourceId": "BangOnline",
       "SourceType": "Discovered",
@@ -224,6 +224,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\assets\\cards\\indians.png"
+    },
+    {
+      "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\jail.png",
+      "SourceId": "BangOnline",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\",
+      "BasePath": "_content/BangOnline",
+      "RelativePath": "assets/cards/jail.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\assets\\cards\\jail.png"
     },
     {
       "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\missed.png",

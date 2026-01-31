@@ -9,10 +9,6 @@
       "PackagePath": "staticwebassets\\assets\\backgrounds\\table.jpg"
     },
     {
-      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\a",
-      "PackagePath": "staticwebassets\\assets\\cards"
-    },
-    {
       "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\bang.png",
       "PackagePath": "staticwebassets\\assets\\cards\\bang.png"
     },
@@ -33,6 +29,10 @@
       "PackagePath": "staticwebassets\\assets\\cards\\duel.png"
     },
     {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\dynamite.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\dynamite.png"
+    },
+    {
       "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\gatling.png",
       "PackagePath": "staticwebassets\\assets\\cards\\gatling.png"
     },
@@ -43,6 +43,10 @@
     {
       "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\indians.png",
       "PackagePath": "staticwebassets\\assets\\cards\\indians.png"
+    },
+    {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\jail.png",
+      "PackagePath": "staticwebassets\\assets\\cards\\jail.png"
     },
     {
       "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\missed.png",
