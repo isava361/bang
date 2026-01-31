@@ -36,15 +36,29 @@ const roomCodeInput = document.getElementById("roomCodeInput");
 const joinRoomButton = document.getElementById("joinRoomButton");
 const roomListContainer = document.getElementById("roomList");
 const leaveButton = document.getElementById("leaveButton");
+const renameButton = document.getElementById("renameButton");
 const spectatorBanner = document.getElementById("spectatorBanner");
 const roomCodeBadge = document.getElementById("roomCodeBadge");
 
 let playerId = null;
 let roomCode = null;
 let currentState = null;
+let lastStateJson = null;
 let selectedCard = null;
 let abilitySelectedIndices = [];
-let lobbyInterval = null;
+let connection = null;
+
+const computeTablePositions = (count) => {
+  const positions = [];
+  for (let i = 0; i < count; i++) {
+    const angle = (-Math.PI / 2) - (2 * Math.PI * i) / count;
+    positions.push({
+      left: 50 + 42 * Math.cos(angle),
+      top: 50 - 40 * Math.sin(angle)
+    });
+  }
+  return positions;
+};
 
 const suitSymbols = { Spades: "\u2660", Hearts: "\u2665", Diamonds: "\u2666", Clubs: "\u2663" };
 const suitColors = { Spades: "#a0a0b0", Hearts: "#e04040", Diamonds: "#e04040", Clubs: "#a0a0b0" };
@@ -296,6 +310,23 @@ const charactersReference = [
   },
 ];
 
+const rolesReference = [
+  { name: "Шериф", color: "#f3b169", description: "Цель — устранить всех Бандитов и Ренегата. Роль открыта, +1 ОЗ." },
+  { name: "Помощник", color: "#6bc46b", description: "Защищает Шерифа. Побеждает вместе с ним." },
+  { name: "Бандит", color: "#e04040", description: "Цель — устранить Шерифа." },
+  { name: "Ренегат", color: "#7a8fe0", description: "Цель — остаться последним. Должен убить всех, включая Шерифа." },
+];
+
+const roleDistribution = [
+  { players: 2, roles: "1 Шериф, 1 Бандит" },
+  { players: 3, roles: "1 Шериф, 1 Бандит, 1 Ренегат" },
+  { players: 4, roles: "1 Шериф, 2 Бандита, 1 Ренегат" },
+  { players: 5, roles: "1 Шериф, 1 Помощник, 2 Бандита, 1 Ренегат" },
+  { players: 6, roles: "1 Шериф, 1 Помощник, 3 Бандита, 1 Ренегат" },
+];
+
+const roleLibrary = document.getElementById("roleLibrary");
+
 const renderLibrary = () => {
   cardLibrary.innerHTML = "";
   cardsReference.forEach((card) => {
@@ -328,6 +359,31 @@ const renderLibrary = () => {
     `;
     characterLibrary.appendChild(item);
   });
+
+  roleLibrary.innerHTML = "";
+  rolesReference.forEach((role) => {
+    const item = document.createElement("div");
+    item.className = "library-item";
+    item.innerHTML = `
+      <div>
+        <strong style="color:${role.color}">${role.name}</strong>
+        <p>${role.description}</p>
+      </div>
+    `;
+    roleLibrary.appendChild(item);
+  });
+
+  const distItem = document.createElement("div");
+  distItem.className = "library-item";
+  distItem.innerHTML = `
+    <div>
+      <strong>Распределение ролей</strong>
+      <table class="role-table">
+        ${roleDistribution.map((r) => `<tr><td>${r.players} игр.</td><td>${r.roles}</td></tr>`).join("")}
+      </table>
+    </div>
+  `;
+  roleLibrary.appendChild(distItem);
 };
 
 const setStatus = (text) => {
@@ -343,6 +399,12 @@ const updateState = (state) => {
   if (!state) {
     return;
   }
+
+  const stateJson = JSON.stringify(state);
+  if (stateJson === lastStateJson) {
+    return;
+  }
+  lastStateJson = stateJson;
 
   currentState = state;
   const isSpectator = !!state.isSpectator;
@@ -388,7 +450,13 @@ const updateState = (state) => {
 
   playersContainer.innerHTML = "";
 
-  state.players.forEach((player) => {
+  const tableEl = document.createElement("div");
+  tableEl.className = "poker-table";
+  playersContainer.appendChild(tableEl);
+
+  const positions = computeTablePositions(state.players.length);
+
+  state.players.forEach((player, index) => {
     const card = document.createElement("div");
     card.className = "player-card";
     if (player.id === state.currentPlayerId) {
@@ -397,6 +465,13 @@ const updateState = (state) => {
     if (!player.isAlive) {
       card.classList.add("out");
     }
+    if (index === 0 && !state.isSpectator) {
+      card.classList.add("self");
+    }
+
+    const pos = positions[index];
+    card.style.left = pos.left + "%";
+    card.style.top = pos.top + "%";
 
     const portraitHtml = player.characterPortrait
       ? `<img class="player-portrait" src="${player.characterPortrait}" alt="${player.characterName}" onerror="this.style.display='none'"/>`
@@ -824,8 +899,9 @@ const enterLobby = () => {
   if (lobbyPanel) lobbyPanel.classList.remove("hidden");
   gamePanel.classList.add("hidden");
   refreshRoomList();
-  if (lobbyInterval) clearInterval(lobbyInterval);
-  lobbyInterval = setInterval(refreshRoomList, 3000);
+  if (connection && connection.state === "Connected") {
+    connection.invoke("JoinRoom", "lobby").catch(() => {});
+  }
 };
 
 const joinGame = async () => {
@@ -861,12 +937,16 @@ const joinRoom = async (code) => {
     localStorage.setItem("bangPlayerId", playerId);
     localStorage.setItem("bangPlayerName", name);
     localStorage.setItem("bangRoomCode", code);
-    if (lobbyInterval) { clearInterval(lobbyInterval); lobbyInterval = null; }
     if (lobbyPanel) lobbyPanel.classList.add("hidden");
     joinPanel.classList.add("hidden");
     gamePanel.classList.remove("hidden");
     setStatus(`Подключены как ${name}`);
     updateState(data.state);
+    if (connection && connection.state === "Connected") {
+      connection.invoke("LeaveRoom", "lobby").catch(() => {});
+      connection.invoke("Register", playerId).catch(() => {});
+      connection.invoke("JoinRoom", code).catch(() => {});
+    }
   } catch (error) {
     setStatus(error.message);
   }
@@ -874,12 +954,17 @@ const joinRoom = async (code) => {
 
 const leaveRoom = async () => {
   if (!playerId) return;
+  const oldRoom = roomCode;
   try {
     await apiPost("/api/leave", { playerId });
   } catch {}
+  if (connection && connection.state === "Connected" && oldRoom) {
+    connection.invoke("LeaveRoom", oldRoom).catch(() => {});
+  }
   playerId = null;
   roomCode = null;
   currentState = null;
+  lastStateJson = null;
   localStorage.removeItem("bangPlayerId");
   localStorage.removeItem("bangRoomCode");
   gamePanel.classList.add("hidden");
@@ -887,34 +972,51 @@ const leaveRoom = async () => {
   setStatus("Вы вышли из комнаты.");
 };
 
-const refreshRoomList = async () => {
+const renamePlayer = async () => {
+  if (!playerId) return;
+  const currentName = localStorage.getItem("bangPlayerName") || "";
+  const newName = prompt("Введите новое имя:", currentName);
+  if (!newName || !newName.trim() || newName.trim() === currentName) return;
+  try {
+    await apiPost("/api/rename", { playerId, newName: newName.trim() });
+    localStorage.setItem("bangPlayerName", newName.trim());
+    setStatus(`Имя изменено на ${newName.trim()}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+};
+
+const renderRoomList = (rooms) => {
   if (!roomListContainer) return;
+  roomListContainer.innerHTML = "";
+  if (!rooms || rooms.length === 0) {
+    roomListContainer.innerHTML = '<p class="hint">Пока нет комнат. Создайте!</p>';
+    return;
+  }
+  rooms.forEach((room) => {
+    const item = document.createElement("div");
+    item.className = "room-item";
+    item.innerHTML = `
+      <div>
+        <strong class="room-code-badge">${room.roomCode}</strong>
+        <span>${room.statusText}</span>
+        <small>
+          ${room.playerCount} ${formatCountLabel(room.playerCount, "игрок", "игрока", "игроков")},
+          ${room.spectatorCount} ${formatCountLabel(room.spectatorCount, "зритель", "зрителя", "зрителей")}
+        </small>
+      </div>
+      <button class="primary">Войти</button>
+    `;
+    item.querySelector("button").addEventListener("click", () => joinRoom(room.roomCode));
+    roomListContainer.appendChild(item);
+  });
+};
+
+const refreshRoomList = async () => {
   try {
     const response = await fetch("/api/rooms");
     const payload = await response.json();
-    if (!response.ok || !payload.data) return;
-    roomListContainer.innerHTML = "";
-    if (payload.data.length === 0) {
-      roomListContainer.innerHTML = '<p class="hint">Пока нет комнат. Создайте!</p>';
-      return;
-    }
-    payload.data.forEach((room) => {
-      const item = document.createElement("div");
-      item.className = "room-item";
-      item.innerHTML = `
-        <div>
-          <strong class="room-code-badge">${room.roomCode}</strong>
-          <span>${room.statusText}</span>
-          <small>
-            ${room.playerCount} ${formatCountLabel(room.playerCount, "игрок", "игрока", "игроков")},
-            ${room.spectatorCount} ${formatCountLabel(room.spectatorCount, "зритель", "зрителя", "зрителей")}
-          </small>
-        </div>
-        <button class="primary">Войти</button>
-      `;
-      item.querySelector("button").addEventListener("click", () => joinRoom(room.roomCode));
-      roomListContainer.appendChild(item);
-    });
+    if (response.ok && payload.data) renderRoomList(payload.data);
   } catch {}
 };
 
@@ -982,18 +1084,6 @@ const sendChat = async () => {
   }
 };
 
-const refreshState = async () => {
-  if (!playerId) {
-    return;
-  }
-
-  const response = await fetch(`/api/state?playerId=${playerId}`);
-  const payload = await response.json();
-  if (response.ok) {
-    updateState(payload.data);
-  }
-};
-
 const newGame = async () => {
   if (!playerId) return;
   try {
@@ -1015,6 +1105,9 @@ if (newGameButton) {
 }
 if (leaveButton) {
   leaveButton.addEventListener("click", leaveRoom);
+}
+if (renameButton) {
+  renameButton.addEventListener("click", renamePlayer);
 }
 if (createRoomButton) {
   createRoomButton.addEventListener("click", createRoom);
@@ -1079,6 +1172,10 @@ const tryReconnect = async () => {
       gamePanel.classList.remove("hidden");
       setStatus(`Переподключены как ${savedName || "игрок"}`);
       updateState(payload.data);
+      if (connection && connection.state === "Connected") {
+        connection.invoke("Register", playerId).catch(() => {});
+        if (roomCode) connection.invoke("JoinRoom", roomCode).catch(() => {});
+      }
     } else {
       localStorage.removeItem("bangPlayerId");
       localStorage.removeItem("bangRoomCode");
@@ -1091,5 +1188,43 @@ const tryReconnect = async () => {
   }
 };
 
+const initSignalR = async () => {
+  connection = new signalR.HubConnectionBuilder()
+    .withUrl("/gamehub")
+    .withAutomaticReconnect()
+    .build();
+
+  connection.on("StateUpdated", (state) => {
+    updateState(state);
+  });
+
+  connection.on("RoomsUpdated", (rooms) => {
+    renderRoomList(rooms);
+  });
+
+  connection.onreconnected(async () => {
+    if (playerId) {
+      await connection.invoke("Register", playerId).catch(() => {});
+    }
+    if (roomCode) {
+      await connection.invoke("JoinRoom", roomCode).catch(() => {});
+      try {
+        const response = await fetch(`/api/reconnect?playerId=${playerId}`);
+        const payload = await response.json();
+        if (response.ok && payload.data) updateState(payload.data);
+      } catch {}
+    } else if (!lobbyPanel?.classList.contains("hidden")) {
+      await connection.invoke("JoinRoom", "lobby").catch(() => {});
+      refreshRoomList();
+    }
+  });
+
+  try {
+    await connection.start();
+  } catch (err) {
+    console.error("SignalR connection failed:", err);
+  }
+};
+
+initSignalR();
 tryReconnect();
-setInterval(refreshState, 1000);

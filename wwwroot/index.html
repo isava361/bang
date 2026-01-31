@@ -21,7 +21,7 @@
       <p>Введите имя, чтобы найти или создать стол.</p>
       <label class="stack">
         Имя
-        <input id="playerName" type="text" placeholder="Лаки Дьюк" />
+        <input id="playerName" type="text" placeholder="Лаки Дьюк" maxlength="16" />
       </label>
       <button id="joinButton" class="primary">Продолжить</button>
     </section>
@@ -53,6 +53,7 @@
           <button id="endTurnButton">Завершить ход</button>
           <button id="abilityButton" class="hidden">Способность</button>
           <button id="newGameButton" class="primary hidden">Новая игра</button>
+          <button id="renameButton" class="secondary">Сменить имя</button>
           <button id="leaveButton" class="secondary">Выйти</button>
         </div>
       </div>
@@ -90,6 +91,8 @@
       <div id="cardLibrary" class="library-grid"></div>
       <h2>Персонажи</h2>
       <div id="characterLibrary" class="library-grid"></div>
+      <h2>Роли</h2>
+      <div id="roleLibrary" class="library-grid"></div>
     </aside>
   </main>
 
@@ -123,6 +126,7 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -9,6 +9,10 @@
       "PackagePath": "staticwebassets\\assets\\backgrounds\\table.jpg"
     },
     {
+      "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\backgrounds\\table_texture.png",
+      "PackagePath": "staticwebassets\\assets\\backgrounds\\table_texture.png"
+    },
+    {
       "Id": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\cards\\bang.png",
       "PackagePath": "staticwebassets\\assets\\cards\\bang.png"
     },

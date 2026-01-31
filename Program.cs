@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -6,6 +7,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 builder.Services.AddSingleton<RoomManager>();
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 app.UseDefaultFiles();
@@ -15,11 +17,32 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URL
     app.Urls.Add("http://0.0.0.0:5000");
 }
 
+app.MapHub<GameHub>("/gamehub");
+
+async Task BroadcastState(IHubContext<GameHub> hub, GameState game, RoomManager rooms)
+{
+    var playerIds = rooms.GetAllPlayerIdsInRoom(game.RoomCode);
+    foreach (var pid in playerIds)
+    {
+        var connId = rooms.GetConnectionId(pid);
+        if (connId == null) continue;
+        var state = game.IsSpectator(pid) ? game.ToSpectatorView(pid) : game.ToView(pid);
+        if (state != null)
+            await hub.Clients.Client(connId).SendAsync("StateUpdated", state);
+    }
+}
+
+async Task BroadcastLobby(IHubContext<GameHub> hub, RoomManager rooms)
+{
+    await hub.Clients.Group("lobby").SendAsync("RoomsUpdated", rooms.ListRooms());
+}
+
 // --- Room management endpoints ---
 
-app.MapPost("/api/room/create", (RoomManager rooms) =>
+app.MapPost("/api/room/create", async (RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var (code, _) = rooms.CreateRoom();
+    await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(new CreateRoomResponse(code), "Комната создана."));
 });
 
@@ -28,11 +51,16 @@ app.MapGet("/api/rooms", (RoomManager rooms) =>
     return Results.Ok(new ApiResponse(rooms.ListRooms(), "ОК"));
 });
 
-app.MapPost("/api/join", (JoinRoomRequest request, RoomManager rooms) =>
+app.MapPost("/api/join", async (JoinRoomRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     if (string.IsNullOrWhiteSpace(request.Name))
     {
         return Results.BadRequest(new ApiResponse(null, "Введите имя."));
+    }
+
+    if (request.Name.Trim().Length > 16)
+    {
+        return Results.BadRequest(new ApiResponse(null, "Имя не должно превышать 16 символов."));
     }
 
     if (string.IsNullOrWhiteSpace(request.RoomCode))
@@ -55,10 +83,12 @@ app.MapPost("/api/join", (JoinRoomRequest request, RoomManager rooms) =>
     rooms.RegisterPlayer(result.PlayerId!, game.RoomCode);
     var isSpec = game.IsSpectator(result.PlayerId!);
     var state = isSpec ? game.ToSpectatorView(result.PlayerId!) : game.ToView(result.PlayerId!);
+    await BroadcastState(hub, game, rooms);
+    await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(new JoinResponse(result.PlayerId!, state), result.Message));
 });
 
-app.MapPost("/api/leave", (LeaveRequest request, RoomManager rooms) =>
+app.MapPost("/api/leave", async (LeaveRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null)
@@ -66,14 +96,17 @@ app.MapPost("/api/leave", (LeaveRequest request, RoomManager rooms) =>
         return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
     }
 
+    var roomCode = game.RoomCode;
     var result = game.RemovePlayer(request.PlayerId);
     rooms.UnregisterPlayer(request.PlayerId);
+    await BroadcastState(hub, game, rooms);
+    await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(null, result.Message));
 });
 
 // --- Gameplay endpoints ---
 
-app.MapPost("/api/start", (PlayerRequest request, RoomManager rooms) =>
+app.MapPost("/api/start", async (PlayerRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -82,10 +115,12 @@ app.MapPost("/api/start", (PlayerRequest request, RoomManager rooms) =>
 
     var result = game.StartGame(request.PlayerId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
+    await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/play", (PlayRequest request, RoomManager rooms) =>
+app.MapPost("/api/play", async (PlayRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -93,10 +128,11 @@ app.MapPost("/api/play", (PlayRequest request, RoomManager rooms) =>
 
     var result = game.PlayCard(request.PlayerId, request.CardIndex, request.TargetId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/respond", (RespondRequest request, RoomManager rooms) =>
+app.MapPost("/api/respond", async (RespondRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -104,10 +140,11 @@ app.MapPost("/api/respond", (RespondRequest request, RoomManager rooms) =>
 
     var result = game.Respond(request.PlayerId, request.ResponseType, request.CardIndex, request.TargetId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/end", (PlayerRequest request, RoomManager rooms) =>
+app.MapPost("/api/end", async (PlayerRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -115,20 +152,22 @@ app.MapPost("/api/end", (PlayerRequest request, RoomManager rooms) =>
 
     var result = game.EndTurn(request.PlayerId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/chat", (ChatRequest request, RoomManager rooms) =>
+app.MapPost("/api/chat", async (ChatRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
 
     var result = game.AddChat(request.PlayerId, request.Text);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/ability", (AbilityRequest request, RoomManager rooms) =>
+app.MapPost("/api/ability", async (AbilityRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -136,10 +175,11 @@ app.MapPost("/api/ability", (AbilityRequest request, RoomManager rooms) =>
 
     var result = game.UseAbility(request.PlayerId, request.CardIndices);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
 });
 
-app.MapPost("/api/newgame", (PlayerRequest request, RoomManager rooms) =>
+app.MapPost("/api/newgame", async (PlayerRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
@@ -147,7 +187,27 @@ app.MapPost("/api/newgame", (PlayerRequest request, RoomManager rooms) =>
 
     var result = game.ResetGame(request.PlayerId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
+    await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(result.State, result.Message));
+});
+
+app.MapPost("/api/rename", async (RenameRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
+{
+    if (string.IsNullOrWhiteSpace(request.NewName))
+        return Results.BadRequest(new ApiResponse(null, "Введите новое имя."));
+
+    if (request.NewName.Trim().Length > 16)
+        return Results.BadRequest(new ApiResponse(null, "Имя не должно превышать 16 символов."));
+
+    var game = rooms.GetRoomByPlayer(request.PlayerId);
+    if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
+
+    var result = game.RenamePlayer(request.PlayerId, request.NewName.Trim());
+    if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
+    await BroadcastState(hub, game, rooms);
+    await BroadcastLobby(hub, rooms);
+    return Results.Ok(new ApiResponse(null, result.Message));
 });
 
 app.MapGet("/api/reconnect", (string playerId, RoomManager rooms) =>
@@ -183,6 +243,7 @@ record RoomInfo(string RoomCode, int PlayerCount, int SpectatorCount, bool Start
 record JoinRoomRequest(string Name, string RoomCode);
 record CreateRoomResponse(string RoomCode);
 record LeaveRequest(string PlayerId);
+record RenameRequest(string PlayerId, string NewName);
 
 record PendingActionView(
     string Type,
@@ -248,6 +309,7 @@ class GameState
     private const int StartingHand = 4;
     private readonly Dictionary<string, PlayerState> _players = new();
     private readonly List<string> _turnOrder = new();
+    private readonly List<string> _seatOrder = new();
     private readonly Random _random = new();
     private readonly Stack<Card> _drawPile = new();
     private readonly List<Card> _discardPile = new();
@@ -279,6 +341,15 @@ class GameState
         if (_eventLog.Count > 20) _eventLog.RemoveAt(_eventLog.Count - 1);
     }
 
+    private static string PluralCard(int n)
+    {
+        var mod10 = n % 10;
+        var mod100 = n % 100;
+        if (mod10 == 1 && mod100 != 11) return $"{n} карту";
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return $"{n} карты";
+        return $"{n} карт";
+    }
+
     public CommandResult TryAddPlayer(string name)
     {
         lock (_lock)
@@ -301,9 +372,34 @@ class GameState
             var player = new PlayerState(id, name, character);
             _players[id] = player;
             _turnOrder.Add(id);
+            _seatOrder.Add(id);
             _hostId ??= id;
             AddEvent($"{name} присоединился как {character.Name}.");
             return new CommandResult(true, "Вы в комнате.", PlayerId: id);
+        }
+    }
+
+    public CommandResult RenamePlayer(string playerId, string newName)
+    {
+        lock (_lock)
+        {
+            if (_players.TryGetValue(playerId, out var player))
+            {
+                var oldName = player.Name;
+                player.Name = newName;
+                AddEvent($"{oldName} теперь известен как {newName}.");
+                return new CommandResult(true, "Имя изменено.");
+            }
+
+            if (_spectators.Contains(playerId))
+            {
+                var oldName = _spectatorNames.GetValueOrDefault(playerId, "Зритель");
+                _spectatorNames[playerId] = newName;
+                AddEvent($"{oldName} теперь известен как {newName}.");
+                return new CommandResult(true, "Имя изменено.");
+            }
+
+            return new CommandResult(false, "Игрок не найден.");
         }
     }
 
@@ -328,6 +424,8 @@ class GameState
 
             _turnOrder.Clear();
             _turnOrder.AddRange(_players.Values.OrderBy(_ => _random.Next()).Select(p => p.Id));
+            _seatOrder.Clear();
+            _seatOrder.AddRange(_turnOrder);
             _usedCharacterIndices.Clear();
             _pendingAction = null;
             _eventLog.Clear();
@@ -418,7 +516,7 @@ class GameState
             if (effectiveType == CardType.Bang && player.BangsPlayedThisTurn >= GetBangLimit(player))
             {
                 var limit = GetBangLimit(player);
-                return new CommandResult(false, $"Можно сыграть только {limit} Бах! за ход.");
+                return new CommandResult(false, $"Можно сыграть только {limit} Бэнг! за ход.");
             }
 
             var needsTarget = card.RequiresTarget || effectiveType == CardType.Bang;
@@ -578,7 +676,7 @@ class GameState
                     endingPlayer.Id,
                     new[] { endingPlayer.Id });
                 var excess = endingPlayer.Hand.Count - endingPlayer.Hp;
-                var discardMsg = $"{endingPlayer.Name} должен сбросить {excess} карт(ы) до лимита руки.";
+                var discardMsg = $"{endingPlayer.Name} должен сбросить {PluralCard(excess)} до лимита руки.";
                 AddEvent(discardMsg);
                 return new CommandResult(true, discardMsg, ToView(playerId));
             }
@@ -681,7 +779,7 @@ class GameState
                         if (card.Type != CardType.Missed && !(isJanet && card.Type == CardType.Bang))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сыграть Мимо! или Бах!, чтобы увернуться."
+                                ? "Нужно сыграть Мимо! или Бэнг!, чтобы увернуться."
                                 : "Нужно сыграть Мимо!, чтобы увернуться.");
                         }
 
@@ -719,8 +817,8 @@ class GameState
                         if (card.Type != CardType.Bang && !(isJanet && card.Type == CardType.Missed))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сбросить Бах! или Мимо!, чтобы избежать атаки индейцев."
-                                : "Нужно сбросить Бах!, чтобы избежать атаки индейцев.");
+                                ? "Нужно сбросить Бэнг! или Мимо!, чтобы избежать атаки индейцев."
+                                : "Нужно сбросить Бэнг!, чтобы избежать атаки индейцев.");
                         }
 
                         responder.Hand.RemoveAt(cardIndex.Value);
@@ -764,8 +862,8 @@ class GameState
                         if (card.Type != CardType.Bang && !(isJanet && card.Type == CardType.Missed))
                         {
                             return new CommandResult(false, isJanet
-                                ? "Нужно сыграть Бах! или Мимо!, чтобы продолжить дуэль."
-                                : "Нужно сыграть Бах!, чтобы продолжить дуэль.");
+                                ? "Нужно сыграть Бэнг! или Мимо!, чтобы продолжить дуэль."
+                                : "Нужно сыграть Бэнг!, чтобы продолжить дуэль.");
                         }
 
                         responder.Hand.RemoveAt(cardIndex.Value);
@@ -851,7 +949,7 @@ class GameState
                         if (isSteal)
                         {
                             responder.Hand.Add(card);
-                            message = $"{responder.Name} крадёт {card.Name} из руки {stealTarget.Name}.";
+                            message = $"{responder.Name} крадёт карту из руки {stealTarget.Name}.";
                         }
                         else
                         {
@@ -969,11 +1067,11 @@ class GameState
                             _drawPile.Push(leftover);
                         }
                         _pendingAction = null;
-                        message = $"{responder.Name} берёт {picked.Name} и завершает набор.";
+                        message = $"{responder.Name} завершает набор.";
                     }
                     else
                     {
-                        message = $"{responder.Name} берёт {picked.Name}. Осталось выбрать: {_pendingAction.KitCarlsonPicksRemaining}.";
+                        message = $"{responder.Name} берёт карту. Осталось выбрать: {_pendingAction.KitCarlsonPicksRemaining}.";
                     }
                     break;
                 }
@@ -1096,6 +1194,8 @@ class GameState
 
             _turnOrder.Clear();
             _turnOrder.AddRange(_players.Values.OrderBy(_ => _random.Next()).Select(p => p.Id));
+            _seatOrder.Clear();
+            _seatOrder.AddRange(_turnOrder);
             _usedCharacterIndices.Clear();
             _pendingAction = null;
             _eventLog.Clear();
@@ -1160,6 +1260,7 @@ class GameState
             {
                 _players.Remove(playerId);
                 _turnOrder.Remove(playerId);
+                _seatOrder.Remove(playerId);
                 AddEvent($"{name} покинул комнату.");
                 TransferHostIfNeeded(playerId);
                 return new CommandResult(true, "Вы покинули комнату.");
@@ -1265,7 +1366,10 @@ class GameState
 
             var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
             var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
-            var players = _players.Values
+            var seatList = _seatOrder.Count > 0 ? _seatOrder : _turnOrder;
+            var orderedIds = seatList.Where(id => _players.ContainsKey(id)).ToList();
+            var players = orderedIds
+                .Select(id => _players[id])
                 .Select(p => new PlayerView(
                     p.Id,
                     p.Name,
@@ -1279,7 +1383,6 @@ class GameState
                     p.Character.PortraitPath,
                     p.Hand.Count,
                     p.InPlay.Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value)).ToList()))
-                .OrderBy(p => p.Name)
                 .ToList();
 
             PendingActionView? pendingView = null;
@@ -1327,7 +1430,14 @@ class GameState
 
             var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
             var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
-            var players = _players.Values
+            var seatList = _seatOrder.Count > 0 ? _seatOrder : _turnOrder;
+            var orderedIds = seatList.Where(id => _players.ContainsKey(id)).ToList();
+            var viewerIdx = orderedIds.IndexOf(playerId);
+            if (viewerIdx > 0)
+                orderedIds = orderedIds.Skip(viewerIdx).Concat(orderedIds.Take(viewerIdx)).ToList();
+
+            var players = orderedIds
+                .Select(id => _players[id])
                 .Select(p => new PlayerView(
                     p.Id,
                     p.Name,
@@ -1341,7 +1451,6 @@ class GameState
                     p.Character.PortraitPath,
                     p.Hand.Count,
                     p.InPlay.Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value)).ToList()))
-                .OrderBy(p => p.Name)
                 .ToList();
 
             var hand = viewer.Hand
@@ -1357,8 +1466,8 @@ class GameState
                 {
                     PendingActionType.BangDefense => $"Сыграйте Мимо!, чтобы увернуться, или получите {_pendingAction.Damage} урона.",
                     PendingActionType.GatlingDefense => "Сыграйте Мимо!, чтобы увернуться от Гатлинга, или получите 1 урон.",
-                    PendingActionType.IndiansDefense => "Сбросьте Бах!, чтобы избежать индейцев, или получите 1 урон.",
-                    PendingActionType.DuelChallenge => "Сыграйте Бах!, чтобы продолжить дуэль, или получите 1 урон.",
+                    PendingActionType.IndiansDefense => "Сбросьте Бэнг!, чтобы избежать индейцев, или получите 1 урон.",
+                    PendingActionType.DuelChallenge => "Сыграйте Бэнг!, чтобы продолжить дуэль, или получите 1 урон.",
                     PendingActionType.GeneralStorePick => "Выберите карту из Магазина.",
                     PendingActionType.DiscardExcess => $"Сбросьте до {responder.Hp} карт (осталось сбросить: {responder.Hand.Count - responder.Hp}).",
                     PendingActionType.ChooseStealSource => $"Выберите: случайная карта из руки или конкретное снаряжение.",
@@ -1368,7 +1477,8 @@ class GameState
                 };
 
                 List<CardView>? revealedCards = null;
-                if (_pendingAction.RevealedCards != null)
+                var isPrivateReveal = _pendingAction.Type == PendingActionType.KitCarlsonPick;
+                if (_pendingAction.RevealedCards != null && (!isPrivateReveal || responderId == playerId))
                 {
                     revealedCards = _pendingAction.RevealedCards
                         .Select(c => new CardView(c.Name, c.Type, c.Category, c.Description, c.RequiresTarget, c.TargetHint, c.ImagePath, c.Suit.ToString(), c.Value))
@@ -1385,7 +1495,7 @@ class GameState
 
             var weaponRange = GetWeaponRange(viewer);
             Dictionary<string, int>? distances = null;
-            if (Started && !GameOver)
+            if (Started && !GameOver && viewer.IsAlive)
             {
                 distances = new Dictionary<string, int>();
                 foreach (var p in _players.Values)
@@ -1946,7 +2056,7 @@ class GameState
             _pendingAction.StealTargetId = target.Id;
             _pendingAction.StealMode = "discard";
             _pendingAction.RevealedCards = target.InPlay.ToList();
-            return $"{attacker.Name} использует Кэт Балу против {target.Name}! Выберите: случайная карта из руки или снаряжение.";
+            return $"{attacker.Name} использует Красотка против {target.Name}! Выберите: случайная карта из руки или снаряжение.";
         }
 
         if (target.Hand.Count > 0)
@@ -1955,13 +2065,13 @@ class GameState
             var discarded = target.Hand[idx];
             target.Hand.RemoveAt(idx);
             _discardPile.Add(discarded);
-            return $"{attacker.Name} использует Кэт Балу против {target.Name} и сбрасывает {discarded.Name}.";
+            return $"{attacker.Name} использует Красотка против {target.Name} и сбрасывает {discarded.Name}.";
         }
 
         var equip = target.InPlay[_random.Next(target.InPlay.Count)];
         target.InPlay.Remove(equip);
         _discardPile.Add(equip);
-        return $"{attacker.Name} использует Кэт Балу против {target.Name} и сбрасывает {equip.Name}.";
+        return $"{attacker.Name} использует Красотка против {target.Name} и сбрасывает {equip.Name}.";
     }
 
     private string ResolveIndians(PlayerState attacker)
@@ -1976,7 +2086,7 @@ class GameState
             PendingActionType.IndiansDefense,
             attacker.Id,
             responders);
-        return $"{attacker.Name} играет Индейцы! Каждый должен сбросить Бах! или получить 1 урон.";
+        return $"{attacker.Name} играет Индейцы! Каждый должен сбросить Бэнг! или получить 1 урон.";
     }
 
     private string ResolveDuel(PlayerState attacker, PlayerState target)
@@ -2015,7 +2125,7 @@ class GameState
             var stolen = target.Hand[idx];
             target.Hand.RemoveAt(idx);
             attacker.Hand.Add(stolen);
-            return $"{attacker.Name} использует Паника! и крадёт {stolen.Name} у {target.Name}.";
+            return $"{attacker.Name} использует Паника! и крадёт карту из руки {target.Name}.";
         }
 
         var equip = target.InPlay[_random.Next(target.InPlay.Count)];
@@ -2108,8 +2218,23 @@ class GameState
         target.Hp -= damage;
         if (target.Hp <= 0)
         {
-            target.IsAlive = false;
-            HandlePlayerDeath(attacker, target);
+            var aliveCount = _players.Values.Count(p => p.IsAlive);
+            while (target.Hp <= 0 && aliveCount > 2)
+            {
+                var beerIndex = target.Hand.FindIndex(c => c.Type == CardType.Beer);
+                if (beerIndex < 0) break;
+                var beer = target.Hand[beerIndex];
+                target.Hand.RemoveAt(beerIndex);
+                _discardPile.Add(beer);
+                target.Hp += 1;
+                AddEvent($"{target.Name} использует Пиво, чтобы остаться в игре!");
+            }
+
+            if (target.Hp <= 0)
+            {
+                target.IsAlive = false;
+                HandlePlayerDeath(attacker, target);
+            }
         }
 
         if (target.IsAlive)
@@ -2162,6 +2287,12 @@ class GameState
         dead.Hand.Clear();
         dead.InPlay.Clear();
 
+        if (dead.Role == Role.Bandit && killer.Id != dead.Id)
+        {
+            DrawCards(killer, 3);
+            AddEvent($"{killer.Name} получает 3 карты за устранение Бандита.");
+        }
+
         if (killer.Role == Role.Sheriff && dead.Role == Role.Deputy)
         {
             foreach (var card in killer.Hand)
@@ -2174,6 +2305,7 @@ class GameState
             }
             killer.Hand.Clear();
             killer.InPlay.Clear();
+            AddEvent($"{killer.Name} (Шериф) сбрасывает все карты за убийство Помощника!");
         }
 
         RemoveFromTurnOrder(dead.Id);
@@ -2336,7 +2468,7 @@ class PlayerState
     }
 
     public string Id { get; }
-    public string Name { get; }
+    public string Name { get; set; }
     public int Hp { get; set; }
     public int MaxHp { get; private set; }
     public bool IsAlive { get; set; } = true;
@@ -2467,7 +2599,7 @@ static class CardLibrary
     {
         {
             CardType.Bang,
-            new CardDefinition("Бах!", CardType.Bang, CardCategory.Brown, "Нанесите 1 урон цели (2, если вы Слэб Убийца).", true, "Выберите игрока для выстрела", "/assets/cards/bang.png")
+            new CardDefinition("Бэнг!", CardType.Bang, CardCategory.Brown, "Нанесите 1 урон цели (2, если вы Слэб Убийца).", true, "Выберите игрока для выстрела", "/assets/cards/bang.png")
         },
         {
             CardType.Missed,
@@ -2487,15 +2619,15 @@ static class CardLibrary
         },
         {
             CardType.CatBalou,
-            new CardDefinition("Кэт Балу", CardType.CatBalou, CardCategory.Brown, "Заставьте цель сбросить карту (рука или снаряжение).", true, "Выберите игрока для сброса", "/assets/cards/cat_balou.png")
+            new CardDefinition("Красотка", CardType.CatBalou, CardCategory.Brown, "Заставьте цель сбросить карту (рука или снаряжение).", true, "Выберите игрока для сброса", "/assets/cards/cat_balou.png")
         },
         {
             CardType.Indians,
-            new CardDefinition("Индейцы!", CardType.Indians, CardCategory.Brown, "Каждый другой игрок должен сбросить Бах! или получить 1 урон.", false, null, "/assets/cards/indians.png")
+            new CardDefinition("Индейцы!", CardType.Indians, CardCategory.Brown, "Каждый другой игрок должен сбросить Бэнг! или получить 1 урон.", false, null, "/assets/cards/indians.png")
         },
         {
             CardType.Duel,
-            new CardDefinition("Дуэль", CardType.Duel, CardCategory.Brown, "Вызовите игрока на дуэль — по очереди сбрасывайте Бах!. Кто не сможет, получает 1 урон.", true, "Выберите соперника для дуэли", "/assets/cards/duel.png")
+            new CardDefinition("Дуэль", CardType.Duel, CardCategory.Brown, "Вызовите игрока на дуэль — по очереди сбрасывайте Бэнг!. Кто не сможет, получает 1 урон.", true, "Выберите соперника для дуэли", "/assets/cards/duel.png")
         },
         {
             CardType.Panic,
@@ -2527,7 +2659,7 @@ static class CardLibrary
         },
         {
             CardType.Volcanic,
-            new CardDefinition("Вулканик", CardType.Volcanic, CardCategory.Weapon, "Оружие (дальность 1). Можно играть Бах! без ограничения за ход.", false, null, "/assets/cards/volcanic.png")
+            new CardDefinition("Вулканик", CardType.Volcanic, CardCategory.Weapon, "Оружие (дальность 1). Можно играть Бэнг! без ограничения за ход.", false, null, "/assets/cards/volcanic.png")
         },
         {
             CardType.Schofield,
@@ -2572,7 +2704,7 @@ static class CharacterLibrary
         new CharacterDefinition(
             "Слэб Убийца",
             4,
-            "Ваши Бах! наносят 2 урона.",
+            "Ваши Бэнг! наносят 2 урона.",
             "/assets/characters/slab_the_killer.png"),
         new CharacterDefinition(
             "Эль Гринго",
@@ -2607,7 +2739,7 @@ static class CharacterLibrary
         new CharacterDefinition(
             "Каламити Джанет",
             4,
-            "Используйте Бах! как Мимо! и Мимо! как Бах!.",
+            "Используйте Бэнг! как Мимо! и Мимо! как Бэнг!.",
             "/assets/characters/calamity_janet.png"),
         new CharacterDefinition(
             "Кит Карлсон",
@@ -2617,7 +2749,7 @@ static class CharacterLibrary
         new CharacterDefinition(
             "Уилли Кид",
             4,
-            "Можно играть Бах! без ограничения за ход.",
+            "Можно играть Бэнг! без ограничения за ход.",
             "/assets/characters/willy_the_kid.png"),
         new CharacterDefinition(
             "Сид Кетчум",
@@ -2721,6 +2853,35 @@ class RoomManager
         }
     }
 
+    private readonly Dictionary<string, string> _playerConnectionMap = new();
+
+    public void SetConnection(string playerId, string connectionId)
+    {
+        lock (_lock) { _playerConnectionMap[playerId] = connectionId; }
+    }
+
+    public void RemoveConnection(string connectionId)
+    {
+        lock (_lock)
+        {
+            var key = _playerConnectionMap.FirstOrDefault(kv => kv.Value == connectionId).Key;
+            if (key != null) _playerConnectionMap.Remove(key);
+        }
+    }
+
+    public string? GetConnectionId(string playerId)
+    {
+        lock (_lock) { return _playerConnectionMap.TryGetValue(playerId, out var cid) ? cid : null; }
+    }
+
+    public List<string> GetAllPlayerIdsInRoom(string roomCode)
+    {
+        lock (_lock)
+        {
+            return _playerRoomMap.Where(kv => kv.Value == roomCode).Select(kv => kv.Key).ToList();
+        }
+    }
+
     private string GenerateRoomCode()
     {
         string code;
@@ -2729,5 +2890,38 @@ class RoomManager
             code = new string(Enumerable.Range(0, 4).Select(_ => RoomChars[_random.Next(RoomChars.Length)]).ToArray());
         } while (_rooms.ContainsKey(code));
         return code;
+    }
+}
+
+class GameHub : Hub
+{
+    private readonly RoomManager _rooms;
+
+    public GameHub(RoomManager rooms) { _rooms = rooms; }
+
+    public async Task Register(string playerId)
+    {
+        _rooms.SetConnection(playerId, Context.ConnectionId);
+        var game = _rooms.GetRoomByPlayer(playerId);
+        if (game != null)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, game.RoomCode);
+        }
+    }
+
+    public async Task JoinRoom(string roomCode)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
+    }
+
+    public async Task LeaveRoom(string roomCode)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomCode);
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        _rooms.RemoveConnection(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
     }
 }

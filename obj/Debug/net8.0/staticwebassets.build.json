@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "eiz2BeJD16/d70Dx1D36q7sziQIlrVVa7Zhqj1vNgtM=",
+  "Hash": "OaH3kq7GM7UFp3z6XDJfdVGh/Xx8id/lNfygsr6+mgY=",
   "Source": "BangOnline",
   "BasePath": "_content/BangOnline",
   "Mode": "Default",
@@ -34,6 +34,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\app.js"
+    },
+    {
+      "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\backgrounds\\table_texture.png",
+      "SourceId": "BangOnline",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\",
+      "BasePath": "_content/BangOnline",
+      "RelativePath": "assets/backgrounds/table_texture.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\assets\\backgrounds\\table_texture.png"
     },
     {
       "Identity": "C:\\Users\\Ivan\\OneDrive\\Документы\\GitHub\\bang\\wwwroot\\assets\\backgrounds\\table.jpg",
