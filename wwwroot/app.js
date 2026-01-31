@@ -56,12 +56,12 @@ const formatCountLabel = (count, singular, few, many) => {
   return many;
 };
 const cardTypeLabels = {
-  Bang: "Бах!",
+  Bang: "Бэнг!",
   Missed: "Мимо!",
   Beer: "Пиво",
   Gatling: "Гатлинг",
   Stagecoach: "Дилижанс",
-  CatBalou: "Кэт Балу",
+  CatBalou: "Красотка",
   Indians: "Индейцы!",
   Duel: "Дуэль",
   Panic: "Паника!",
@@ -102,7 +102,7 @@ const formatSuitValue = (card) => {
 
 const cardsReference = [
   {
-    name: "Бах!",
+    name: "Бэнг!",
     type: "Bang",
     description: "Нанесите 1 урон (2, если вы Слэб Убийца).",
     imagePath: "/assets/cards/bang.png",
@@ -132,7 +132,7 @@ const cardsReference = [
     imagePath: "/assets/cards/stagecoach.png",
   },
   {
-    name: "Кэт Балу",
+    name: "Красотка",
     type: "CatBalou",
     description: "Заставьте цель сбросить карту (рука или снаряжение).",
     imagePath: "/assets/cards/cat_balou.png",
@@ -140,13 +140,13 @@ const cardsReference = [
   {
     name: "Индейцы!",
     type: "Indians",
-    description: "Каждый другой игрок должен сбросить Бах! или получить 1 урон.",
+    description: "Каждый другой игрок должен сбросить Бэнг! или получить 1 урон.",
     imagePath: "/assets/cards/indians.png",
   },
   {
     name: "Дуэль",
     type: "Duel",
-    description: "Вызовите игрока на дуэль — по очереди сбрасывайте Бах!.",
+    description: "Вызовите игрока на дуэль — по очереди сбрасывайте Бэнг!.",
     imagePath: "/assets/cards/duel.png",
   },
   {
@@ -194,7 +194,7 @@ const cardsReference = [
   {
     name: "Вулканик",
     type: "Volcanic",
-    description: "Оружие (дальность 1). Можно играть Бах! без ограничения за ход.",
+    description: "Оружие (дальность 1). Можно играть Бэнг! без ограничения за ход.",
     imagePath: "/assets/cards/volcanic.png",
   },
   {
@@ -225,13 +225,13 @@ const cardsReference = [
 
 const charactersReference = [
   {
-    name: "Лаки Дьюк",
+    name: "Счастливчик Дьюк",
     description: "При «проверке» откройте 2 карты и выберите лучший результат.",
     portraitPath: "/assets/characters/lucky_duke.png",
   },
   {
     name: "Слэб Убийца",
-    description: "Ваши Бах! наносят 2 урона.",
+    description: "Ваши Бэнг! наносят 2 урона.",
     portraitPath: "/assets/characters/slab_the_killer.png",
   },
   {
@@ -266,7 +266,7 @@ const charactersReference = [
   },
   {
     name: "Каламити Джанет",
-    description: "Используйте Бах! как Мимо! и Мимо! как Бах!.",
+    description: "Используйте Бэнг! как Мимо! и Мимо! как Бэнг!.",
     portraitPath: "/assets/characters/calamity_janet.png",
   },
   {
@@ -276,7 +276,7 @@ const charactersReference = [
   },
   {
     name: "Уилли Кид",
-    description: "Можно играть Бах! без ограничения за ход.",
+    description: "Можно играть Бэнг! без ограничения за ход.",
     portraitPath: "/assets/characters/willy_the_kid.png",
   },
   {
@@ -285,7 +285,7 @@ const charactersReference = [
     portraitPath: "/assets/characters/sid_ketchum.png",
   },
   {
-    name: "Валчер Сэм",
+    name: "Стервятник Сэм",
     description: "Когда игрок устранён, возьмите все его карты.",
     portraitPath: "/assets/characters/vulture_sam.png",
   },
@@ -449,7 +449,7 @@ const updateState = (state) => {
       state.currentPlayerId === playerId &&
       state.bangsPlayedThisTurn >= state.bangLimit
     ) {
-      element.dataset.tooltip = `Можно сыграть только ${state.bangLimit} Бах! за ход.`;
+      element.dataset.tooltip = `Можно сыграть только ${state.bangLimit} Бэнг! за ход.`;
     }
     const imageHtml = card.imagePath
       ? `<img class="card-image" src="${card.imagePath}" alt="${card.name}" onerror="this.style.display='none'"/>`
@@ -656,7 +656,7 @@ const showResponseOverlay = (pendingAction, state) => {
     } else {
       requiredTypes = isJanet ? ["Missed", "Bang"] : ["Missed"];
     }
-    const requiredName = requiredTypes.map((t) => t === "Bang" ? "Бах!" : "Мимо!").join("/");
+    const requiredName = requiredTypes.map((t) => t === "Bang" ? "Бэнг!" : "Мимо!").join("/");
 
     responseTitle.textContent = isDuel ? "Дуэль" : "Защита";
     responsePass.classList.remove("hidden");
@@ -729,7 +729,7 @@ const onCardSelected = (card, index, element) => {
   const effectiveType = card.type === "Missed" && myChar === "Каламити Джанет" ? "Bang" : card.type;
 
   if (effectiveType === "Bang" && currentState.bangsPlayedThisTurn >= currentState.bangLimit) {
-    showCardTooltip(element, `Можно сыграть только ${currentState.bangLimit} Бах! за ход.`);
+    showCardTooltip(element, `Можно сыграть только ${currentState.bangLimit} Бэнг! за ход.`);
     return;
   }
 
