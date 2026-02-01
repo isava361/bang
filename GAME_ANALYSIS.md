@@ -1,5 +1,37 @@
 # Bang! Online — Game Database & Improvement Analysis
 
+## TODO (tomorrow)
+
+### Task 1 — Security hardening + quick backend fixes
+- [ ] Add HTTPS enforcement (`UseHttpsRedirection` or reverse proxy)
+- [ ] CDN SignalR script: add SRI integrity hash or bundle locally
+- [ ] Abandoned room cleanup (`IHostedService` background task, 10 min timeout)
+- [ ] Simplify verbose error messages (hide distances/ranges from client)
+- [ ] Configure Kestrel request body size limit (64 KB — already done, verify)
+
+### Task 2 — Core UI (high impact, visual foundation)
+- [ ] **CSS custom properties** — extract hardcoded colors into `:root` variables
+- [ ] **Card play animations & visual feedback** — slide/fade on play, flash on target
+- [ ] **Connection status indicator** — color-coded green/yellow/red with text labels
+- [ ] **Modal Escape key & focus trapping** — `keydown` listener, trap Tab in overlays
+- [ ] **Turn indicator enhancement** — pulsing border or banner for active player
+
+### Task 3 — Polish + gameplay feel
+- [ ] **Role reveal & death animation** — flip/flash effect on elimination
+- [ ] **Mobile experience overhaul** — collapsible sidebar, better distance labels
+- [ ] **Card tooltip positioning** — viewport-aware flip logic
+- [ ] **Hand card layout redesign** — horizontal scrollable fan instead of grid
+- [ ] **Event log & chat improvements** — timestamps, sound notifications
+
+### Task 4 — Nice-to-haves + long-term
+- [ ] **Add persistence** — SQLite or JSON file for game history/stats
+- [ ] **Lobby polish** — copy room code button, player count in room list
+- [ ] **Accessibility audit** — ARIA labels, colorblind-friendly disabled states
+- [ ] **Micro-animations** — hover/press, card draw slide-in, HP flash
+- [ ] **Disabled button visual distinction** — icon/pattern instead of opacity only
+
+---
+
 ## 1. Data Architecture Overview
 
 The game uses **no persistent database**. All state is held in-memory via a
@@ -184,7 +216,8 @@ Each turn follows this order:
   the most recent event highlighted.
 - **Chat separated from game events** -- dedicated chat message list above
   the chat input, independent of the event log.
-- **Polling at 1-second intervals** -- responsive enough for casual play.
+- **Real-time updates via SignalR** -- no polling; state pushed to all clients
+  on every action via WebSocket.
 - **Reconnection via localStorage** -- `playerId` and `bangRoomCode` saved on
   join, auto-restored on page reload through `/api/reconnect`. Failed reconnect
   falls back to the lobby.
@@ -201,7 +234,14 @@ Each turn follows this order:
 1. **No role reveal animation or notification** when a player dies.
 2. **No visual feedback** on card play success -- the card just disappears
    from the hand.
-3. Consider **WebSocket/SSE** for instant updates instead of polling.
+3. ~~Consider **WebSocket/SSE** for instant updates instead of polling.~~ **Done** -- SignalR push, no polling.
+4. **No Escape key or focus trapping** on modal overlays.
+5. **Connection status badge** doesn't clearly indicate state.
+6. **Mobile sidebar** has no collapse toggle — pushes content down.
+7. **Card tooltips** clip at viewport edges.
+8. **Turn indicator** (`.active` glow) is too subtle.
+9. **No ARIA labels** on interactive elements.
+10. **Hand card grid** wraps awkwardly on mid-size screens.
 
 ---
 
@@ -224,14 +264,38 @@ Each turn follows this order:
 | 11 | **Leave/rejoin** with mid-game elimination and lobby fallback | Done |
 | 12 | **Card art fix** (full artwork visible, no cropping) | Done |
 
-### Remaining
+### Remaining — UI Improvements
 
-| # | Improvement | Impact |
-|---|-------------|--------|
-| 1 | **Switch to WebSockets or SSE** for real-time updates | Eliminates polling delay entirely |
-| 2 | **Add persistence** (SQLite or JSON file) for game history | Enables statistics and match replays |
-| 3 | **Role reveal animation** on player death | Visual polish |
-| 4 | **Card play feedback** (animation or flash) | Visual polish |
+#### Priority 1 — Critical (High impact, affects core experience)
+
+| # | Improvement | Area | Details |
+|---|-------------|------|---------|
+| ~~1~~ | ~~**Switch to WebSockets/SSE** for real-time updates~~ | ~~Networking~~ | **Done.** POST endpoints no longer return state; all updates pushed via SignalR `StateUpdated` / `RoomsUpdated`. No polling intervals remain. |
+| 2 | **Card play animations & visual feedback** | UX | Cards disappear instantly from hand with no indication of success. Add a slide/fade-out animation on play, and a brief highlight/flash on the target player receiving an action. |
+| 3 | **CSS custom properties (variables)** | Code quality | Colors are hardcoded everywhere (`#e0482e`, `#3a3a4a`, `#0f0f12`, etc.). Extract into `:root` variables for consistency and to enable future theming (e.g. light mode). |
+| 4 | **Modal/overlay keyboard & focus handling** | Accessibility | No Escape key handler to close overlays. No focus trapping inside modals — Tab can navigate behind the overlay. Add `keydown` listener for Escape and trap focus within active overlay. |
+| 5 | **Connection status indicator** | UX | The header badge doesn't clearly distinguish Connected/Connecting/Disconnected. Add color-coded states (green/yellow/red) with text labels. |
+
+#### Priority 2 — Important (Noticeable polish, improves usability)
+
+| # | Improvement | Area | Details |
+|---|-------------|------|---------|
+| 6 | **Role reveal & death animation** | Visual polish | Eliminated players just fade to 50% opacity (`.out` class). Add a role-card flip reveal animation, red flash, or slide-out effect to make eliminations feel impactful. |
+| 7 | **Mobile experience overhaul** | Responsive | Sidebar library has no collapse/toggle on small screens — it pushes content down. Add a hamburger menu or collapsible panel. Player distance labels are hard to read on narrow viewports. The poker table is hidden entirely on mobile with no alternative visual. |
+| 8 | **Turn indicator enhancement** | UX | The current `.active` red glow on the player card is subtle. Add a more prominent visual — pulsing border, top banner, or animated arrow pointing to the active player. |
+| 9 | **Card tooltip positioning** | UX | Tooltips render inside the card element and clip at viewport edges. Add position-aware logic to flip tooltip direction when near bottom/right edge. |
+| 10 | **Add persistence** (SQLite or JSON file) | Backend | Enables game history, statistics, and match replays. Currently all state is lost on server restart. |
+
+#### Priority 3 — Nice to Have (Polish & refinement)
+
+| # | Improvement | Area | Details |
+|---|-------------|------|---------|
+| 11 | **Hand card layout redesign** | Visual | The grid `repeat(auto-fit, minmax(260px, 1fr))` causes awkward wrapping on mid-size screens. A horizontal scrollable row with slight card overlap/fan effect would feel more natural and save vertical space. |
+| 12 | **Event log & chat improvements** | UX | Add timestamps on events/messages. Visual distinction between system events and player chat. Optional sound notifications for key events (Bang played, your turn, etc.). |
+| 13 | **Accessibility audit** | Accessibility | Missing ARIA labels on interactive elements (cards, buttons, overlays). Disabled buttons only use opacity — add a visual pattern or icon for colorblind users. Card suit colors (red vs gray) may have insufficient contrast. |
+| 14 | **Lobby polish** | UX | Show player count / max players in room list. Add a "copy room code" button for sharing. Animate room list updates instead of full re-render. |
+| 15 | **Micro-animations** | Visual polish | Button hover/press states (subtle scale or shadow shift). Card draw animation (slide in from deck). HP change animation (number bounce or flash). |
+| 16 | **Disabled button visual distinction** | Accessibility | Disabled buttons only differ by 50% opacity. Add a crossed-out icon, desaturated color, or pattern fill so the state is clear regardless of color perception. |
 
 ---
 
@@ -294,5 +358,9 @@ Empty rooms are cleaned up automatically.
 browser, "New Game" button, 1-second polling, suit/value displayed on all
 cards, and full card art visible without cropping.
 
-**Remaining improvements:** WebSocket/SSE for real-time updates, persistence,
-and visual polish (death animations, card play feedback).
+**Remaining improvements (16 items, 3 priority tiers):** P1 — WebSocket/SSE
+real-time updates, card play animations, CSS variables, modal keyboard/focus
+handling, connection status indicator. P2 — death/role-reveal animation, mobile
+overhaul, turn indicator, tooltip positioning, persistence. P3 — hand card
+layout redesign, event log/chat timestamps, accessibility audit, lobby polish,
+micro-animations, disabled button distinction.

@@ -1,17 +1,56 @@
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 65536;
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 builder.Services.AddSingleton<RoomManager>();
 builder.Services.AddSignalR();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.SetIsOriginAllowed(origin =>
+        {
+            var host = new Uri(origin).Host;
+            return host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0";
+        })
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+    });
+});
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.AddFixedWindowLimiter("general", opt =>
+    {
+        opt.Window = TimeSpan.FromSeconds(1);
+        opt.PermitLimit = 10;
+        opt.QueueLimit = 0;
+    });
+    options.AddFixedWindowLimiter("create", opt =>
+    {
+        opt.Window = TimeSpan.FromSeconds(5);
+        opt.PermitLimit = 1;
+        opt.QueueLimit = 0;
+    });
+});
 
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseCors();
+app.UseRateLimiter();
 if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
     app.Urls.Add("http://0.0.0.0:5000");
@@ -41,15 +80,19 @@ async Task BroadcastLobby(IHubContext<GameHub> hub, RoomManager rooms)
 
 app.MapPost("/api/room/create", async (RoomManager rooms, IHubContext<GameHub> hub) =>
 {
-    var (code, _) = rooms.CreateRoom();
+    var result = rooms.CreateRoom();
+    if (result.RoomCode == null)
+    {
+        return Results.BadRequest(new ApiResponse(null, "Достигнут лимит комнат. Попробуйте позже."));
+    }
     await BroadcastLobby(hub, rooms);
-    return Results.Ok(new ApiResponse(new CreateRoomResponse(code), "Комната создана."));
-});
+    return Results.Ok(new ApiResponse(new CreateRoomResponse(result.RoomCode), "Комната создана."));
+}).RequireRateLimiting("create");
 
 app.MapGet("/api/rooms", (RoomManager rooms) =>
 {
     return Results.Ok(new ApiResponse(rooms.ListRooms(), "ОК"));
-});
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/join", async (JoinRoomRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -61,6 +104,11 @@ app.MapPost("/api/join", async (JoinRoomRequest request, RoomManager rooms, IHub
     if (request.Name.Trim().Length > 16)
     {
         return Results.BadRequest(new ApiResponse(null, "Имя не должно превышать 16 символов."));
+    }
+
+    if (!Regex.IsMatch(request.Name.Trim(), @"^[\p{L}\p{N}\s\-_]{1,16}$"))
+    {
+        return Results.BadRequest(new ApiResponse(null, "Имя содержит недопустимые символы."));
     }
 
     if (string.IsNullOrWhiteSpace(request.RoomCode))
@@ -86,7 +134,7 @@ app.MapPost("/api/join", async (JoinRoomRequest request, RoomManager rooms, IHub
     await BroadcastState(hub, game, rooms);
     await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(new JoinResponse(result.PlayerId!, state), result.Message));
-});
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/leave", async (LeaveRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -102,7 +150,7 @@ app.MapPost("/api/leave", async (LeaveRequest request, RoomManager rooms, IHubCo
     await BroadcastState(hub, game, rooms);
     await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(null, result.Message));
-});
+}).RequireRateLimiting("general");
 
 // --- Gameplay endpoints ---
 
@@ -117,8 +165,8 @@ app.MapPost("/api/start", async (PlayerRequest request, RoomManager rooms, IHubC
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
     await BroadcastLobby(hub, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/play", async (PlayRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -129,8 +177,8 @@ app.MapPost("/api/play", async (PlayRequest request, RoomManager rooms, IHubCont
     var result = game.PlayCard(request.PlayerId, request.CardIndex, request.TargetId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/respond", async (RespondRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -141,8 +189,8 @@ app.MapPost("/api/respond", async (RespondRequest request, RoomManager rooms, IH
     var result = game.Respond(request.PlayerId, request.ResponseType, request.CardIndex, request.TargetId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/end", async (PlayerRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -153,8 +201,8 @@ app.MapPost("/api/end", async (PlayerRequest request, RoomManager rooms, IHubCon
     var result = game.EndTurn(request.PlayerId);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/chat", async (ChatRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -164,8 +212,8 @@ app.MapPost("/api/chat", async (ChatRequest request, RoomManager rooms, IHubCont
     var result = game.AddChat(request.PlayerId, request.Text);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/ability", async (AbilityRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -176,8 +224,8 @@ app.MapPost("/api/ability", async (AbilityRequest request, RoomManager rooms, IH
     var result = game.UseAbility(request.PlayerId, request.CardIndices);
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/newgame", async (PlayerRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -189,8 +237,8 @@ app.MapPost("/api/newgame", async (PlayerRequest request, RoomManager rooms, IHu
     if (!result.Success) return Results.BadRequest(new ApiResponse(null, result.Message));
     await BroadcastState(hub, game, rooms);
     await BroadcastLobby(hub, rooms);
-    return Results.Ok(new ApiResponse(result.State, result.Message));
-});
+    return Results.Ok(new ApiResponse(null, result.Message));
+}).RequireRateLimiting("general");
 
 app.MapPost("/api/rename", async (RenameRequest request, RoomManager rooms, IHubContext<GameHub> hub) =>
 {
@@ -200,6 +248,9 @@ app.MapPost("/api/rename", async (RenameRequest request, RoomManager rooms, IHub
     if (request.NewName.Trim().Length > 16)
         return Results.BadRequest(new ApiResponse(null, "Имя не должно превышать 16 символов."));
 
+    if (!Regex.IsMatch(request.NewName.Trim(), @"^[\p{L}\p{N}\s\-_]{1,16}$"))
+        return Results.BadRequest(new ApiResponse(null, "Имя содержит недопустимые символы."));
+
     var game = rooms.GetRoomByPlayer(request.PlayerId);
     if (game is null) return Results.BadRequest(new ApiResponse(null, "Вы не в комнате."));
 
@@ -208,7 +259,7 @@ app.MapPost("/api/rename", async (RenameRequest request, RoomManager rooms, IHub
     await BroadcastState(hub, game, rooms);
     await BroadcastLobby(hub, rooms);
     return Results.Ok(new ApiResponse(null, result.Message));
-});
+}).RequireRateLimiting("general");
 
 app.MapGet("/api/reconnect", (string playerId, RoomManager rooms) =>
 {
@@ -218,7 +269,7 @@ app.MapGet("/api/reconnect", (string playerId, RoomManager rooms) =>
     var state = game.IsSpectator(playerId) ? game.ToSpectatorView(playerId) : game.ToView(playerId);
     if (state is null) return Results.BadRequest(new ApiResponse(null, "Неизвестный игрок."));
     return Results.Ok(new ApiResponse(state, "ОК"));
-});
+}).RequireRateLimiting("general");
 
 app.MapGet("/api/state", (string playerId, RoomManager rooms) =>
 {
@@ -228,7 +279,7 @@ app.MapGet("/api/state", (string playerId, RoomManager rooms) =>
     var state = game.IsSpectator(playerId) ? game.ToSpectatorView(playerId) : game.ToView(playerId);
     if (state is null) return Results.BadRequest(new ApiResponse(null, "Неизвестный игрок."));
     return Results.Ok(new ApiResponse(state, "ОК"));
-});
+}).RequireRateLimiting("general");
 
 app.Run();
 
@@ -270,7 +321,8 @@ record GameStateView(
     Dictionary<string, int>? Distances,
     bool IsSpectator = false,
     string? RoomCode = null,
-    string? HostId = null
+    string? HostId = null,
+    string? YourPublicId = null
 );
 
 record PlayerView(
@@ -322,6 +374,7 @@ class GameState
     private readonly List<string> _chatLog = new();
     private readonly HashSet<string> _spectators = new();
     private readonly Dictionary<string, string> _spectatorNames = new();
+    private readonly Dictionary<string, string> _spectatorPublicIds = new();
     private string? _hostId;
 
     public string RoomCode { get; }
@@ -350,6 +403,18 @@ class GameState
         return $"{n} карт";
     }
 
+    private PlayerState? FindByPublicId(string publicId)
+    {
+        return _players.Values.FirstOrDefault(p => p.PublicId == publicId);
+    }
+
+    private string? GetPublicId(string realId)
+    {
+        if (_players.TryGetValue(realId, out var p)) return p.PublicId;
+        if (_spectatorPublicIds.TryGetValue(realId, out var spId)) return spId;
+        return null;
+    }
+
     public CommandResult TryAddPlayer(string name)
     {
         lock (_lock)
@@ -362,6 +427,7 @@ class GameState
                 var specId = Guid.NewGuid().ToString("N");
                 _spectators.Add(specId);
                 _spectatorNames[specId] = name;
+                _spectatorPublicIds[specId] = Guid.NewGuid().ToString("N")[..8];
                 _hostId ??= specId;
                 AddEvent($"{name} присоединился как зритель.");
                 return new CommandResult(true, "Вы зритель.", PlayerId: specId);
@@ -714,6 +780,11 @@ class GameState
                 return new CommandResult(false, "Сообщение не может быть пустым.");
             }
 
+            if (text.Trim().Length > 200)
+            {
+                return new CommandResult(false, "Сообщение слишком длинное (макс. 200 символов).");
+            }
+
             var prefix = isSpectator ? "[Зритель] " : "";
             var chatMsg = $"{prefix}{senderName}: {text.Trim()}";
             _chatLog.Insert(0, chatMsg);
@@ -1018,7 +1089,8 @@ class GameState
 
                 case PendingActionType.JesseJonesSteal:
                 {
-                    if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out var jesseTarget))
+                    var jesseTarget = string.IsNullOrWhiteSpace(targetId) ? null : FindByPublicId(targetId);
+                    if (jesseTarget == null)
                     {
                         return new CommandResult(false, "Выберите игрока, у которого взять карту.");
                     }
@@ -1184,6 +1256,7 @@ class GameState
                 _players[specId] = player;
                 _spectators.Remove(specId);
                 _spectatorNames.Remove(specId);
+                _spectatorPublicIds.Remove(specId);
                 AddEvent($"{name} повышен из зрителя до игрока.");
             }
 
@@ -1243,6 +1316,7 @@ class GameState
                 var specName = _spectatorNames.GetValueOrDefault(playerId, "Зритель");
                 _spectators.Remove(playerId);
                 _spectatorNames.Remove(playerId);
+                _spectatorPublicIds.Remove(playerId);
                 AddEvent($"{specName} (зритель) покинул комнату.");
                 TransferHostIfNeeded(playerId);
                 return new CommandResult(true, "Вы покинули комнату.");
@@ -1364,14 +1438,15 @@ class GameState
         {
             if (!_spectators.Contains(playerId)) return null;
 
-            var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
-            var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
+            var currentRealId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : null;
+            var currentPublicId = currentRealId != null ? GetPublicId(currentRealId) ?? "-" : "-";
+            var currentName = currentRealId != null && _players.TryGetValue(currentRealId, out var current) ? current.Name : "-";
             var seatList = _seatOrder.Count > 0 ? _seatOrder : _turnOrder;
             var orderedIds = seatList.Where(id => _players.ContainsKey(id)).ToList();
             var players = orderedIds
                 .Select(id => _players[id])
                 .Select(p => new PlayerView(
-                    p.Id,
+                    p.PublicId,
                     p.Name,
                     p.Hp,
                     p.MaxHp,
@@ -1392,15 +1467,17 @@ class GameState
                 var responder = _players[responderId];
                 pendingView = new PendingActionView(
                     _pendingAction.Type.ToString(),
-                    responderId,
+                    responder.PublicId,
                     responder.Name,
                     "Ожидание ответа...",
                     null);
             }
 
+            var myPublicId = _spectatorPublicIds.TryGetValue(playerId, out var spPubId) ? spPubId : playerId;
+
             return new GameStateView(
                 Started,
-                currentId,
+                currentPublicId,
                 currentName,
                 GameOver,
                 WinnerMessage,
@@ -1415,7 +1492,8 @@ class GameState
                 null,
                 IsSpectator: true,
                 RoomCode: RoomCode,
-                HostId: _hostId);
+                HostId: GetPublicId(_hostId ?? ""),
+                YourPublicId: myPublicId);
         }
     }
 
@@ -1428,8 +1506,9 @@ class GameState
                 return null;
             }
 
-            var currentId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : "-";
-            var currentName = _players.TryGetValue(currentId, out var current) ? current.Name : "-";
+            var currentRealId = _turnOrder.Count > 0 ? _turnOrder[_turnIndex] : null;
+            var currentPublicId = currentRealId != null ? GetPublicId(currentRealId) ?? "-" : "-";
+            var currentName = currentRealId != null && _players.TryGetValue(currentRealId, out var current) ? current.Name : "-";
             var seatList = _seatOrder.Count > 0 ? _seatOrder : _turnOrder;
             var orderedIds = seatList.Where(id => _players.ContainsKey(id)).ToList();
             var viewerIdx = orderedIds.IndexOf(playerId);
@@ -1439,7 +1518,7 @@ class GameState
             var players = orderedIds
                 .Select(id => _players[id])
                 .Select(p => new PlayerView(
-                    p.Id,
+                    p.PublicId,
                     p.Name,
                     p.Hp,
                     p.MaxHp,
@@ -1487,7 +1566,7 @@ class GameState
 
                 pendingView = new PendingActionView(
                     _pendingAction.Type.ToString(),
-                    responderId,
+                    responder.PublicId,
                     responder.Name,
                     message,
                     revealedCards);
@@ -1502,14 +1581,14 @@ class GameState
                 {
                     if (p.Id != viewer.Id && p.IsAlive)
                     {
-                        distances[p.Id] = GetDistance(viewer.Id, p.Id);
+                        distances[p.PublicId] = GetDistance(viewer.Id, p.Id);
                     }
                 }
             }
 
             return new GameStateView(
                 Started,
-                currentId,
+                currentPublicId,
                 currentName,
                 GameOver,
                 WinnerMessage,
@@ -1524,7 +1603,8 @@ class GameState
                 distances,
                 IsSpectator: false,
                 RoomCode: RoomCode,
-                HostId: _hostId);
+                HostId: GetPublicId(_hostId ?? ""),
+                YourPublicId: viewer.PublicId);
         }
     }
 
@@ -2188,14 +2268,22 @@ class GameState
         return $"{player.Name} открывает Магазин! Каждый выбирает карту.";
     }
 
-    private bool TryGetTarget(string? targetId, string playerId, out PlayerState target, out string error)
+    private bool TryGetTarget(string? targetPublicId, string playerId, out PlayerState target, out string error)
     {
-        if (string.IsNullOrWhiteSpace(targetId) || !_players.TryGetValue(targetId, out target!))
+        target = null!;
+        if (string.IsNullOrWhiteSpace(targetPublicId))
         {
             error = "Игрок-цель не найден.";
-            target = null!;
             return false;
         }
+
+        var found = FindByPublicId(targetPublicId);
+        if (found == null)
+        {
+            error = "Игрок-цель не найден.";
+            return false;
+        }
+        target = found;
 
         if (target.Id == playerId)
         {
@@ -2468,6 +2556,7 @@ class PlayerState
     }
 
     public string Id { get; }
+    public string PublicId { get; } = Guid.NewGuid().ToString("N")[..8];
     public string Name { get; set; }
     public int Hp { get; set; }
     public int MaxHp { get; private set; }
@@ -2790,12 +2879,15 @@ class RoomManager
     private readonly object _lock = new();
     private readonly Random _random = new();
     private const string RoomChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private const int MaxRooms = 50;
 
-    public (string RoomCode, GameState Room) CreateRoom()
+    public (string? RoomCode, GameState? Room) CreateRoom()
     {
         lock (_lock)
         {
+            if (_rooms.Count >= MaxRooms) return (null, null);
             var code = GenerateRoomCode();
+            if (code == null) return (null, null);
             var room = new GameState(code);
             _rooms[code] = room;
             return (code, room);
@@ -2869,6 +2961,15 @@ class RoomManager
         }
     }
 
+    public string? GetPlayerIdByConnection(string connectionId)
+    {
+        lock (_lock)
+        {
+            var entry = _playerConnectionMap.FirstOrDefault(kv => kv.Value == connectionId);
+            return entry.Key;
+        }
+    }
+
     public string? GetConnectionId(string playerId)
     {
         lock (_lock) { return _playerConnectionMap.TryGetValue(playerId, out var cid) ? cid : null; }
@@ -2882,14 +2983,14 @@ class RoomManager
         }
     }
 
-    private string GenerateRoomCode()
+    private string? GenerateRoomCode()
     {
-        string code;
-        do
+        for (var attempt = 0; attempt < 1000; attempt++)
         {
-            code = new string(Enumerable.Range(0, 4).Select(_ => RoomChars[_random.Next(RoomChars.Length)]).ToArray());
-        } while (_rooms.ContainsKey(code));
-        return code;
+            var code = new string(Enumerable.Range(0, 4).Select(_ => RoomChars[_random.Next(RoomChars.Length)]).ToArray());
+            if (!_rooms.ContainsKey(code)) return code;
+        }
+        return null;
     }
 }
 
@@ -2901,6 +3002,7 @@ class GameHub : Hub
 
     public async Task Register(string playerId)
     {
+        if (_rooms.GetRoomByPlayer(playerId) == null) return;
         _rooms.SetConnection(playerId, Context.ConnectionId);
         var game = _rooms.GetRoomByPlayer(playerId);
         if (game != null)
@@ -2911,6 +3013,15 @@ class GameHub : Hub
 
     public async Task JoinRoom(string roomCode)
     {
+        if (roomCode == "lobby")
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
+            return;
+        }
+        var connPlayerId = _rooms.GetPlayerIdByConnection(Context.ConnectionId);
+        if (connPlayerId == null) return;
+        var game = _rooms.GetRoomByPlayer(connPlayerId);
+        if (game == null || game.RoomCode != roomCode) return;
         await Groups.AddToGroupAsync(Context.ConnectionId, roomCode);
     }
 

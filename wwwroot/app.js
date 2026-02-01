@@ -1,3 +1,9 @@
+const escapeHtml = (str) => {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+};
+
 const joinPanel = document.getElementById("joinPanel");
 const gamePanel = document.getElementById("gamePanel");
 const connectionStatus = document.getElementById("connectionStatus");
@@ -391,7 +397,7 @@ const setStatus = (text) => {
 };
 
 const getMyCharacterName = (state) => {
-  const me = state.players.find((p) => p.id === playerId);
+  const me = state.players.find((p) => p.id === state.yourPublicId);
   return me ? me.characterName : "";
 };
 
@@ -474,13 +480,13 @@ const updateState = (state) => {
     card.style.top = pos.top + "%";
 
     const portraitHtml = player.characterPortrait
-      ? `<img class="player-portrait" src="${player.characterPortrait}" alt="${player.characterName}" onerror="this.style.display='none'"/>`
+      ? `<img class="player-portrait" src="${escapeHtml(player.characterPortrait)}" alt="${escapeHtml(player.characterName)}" onerror="this.style.display='none'"/>`
       : "";
 
     const equipHtml = player.equipment && player.equipment.length > 0
       ? player.equipment.map((e) => {
           const sv = e.suit ? ` ${formatSuitValue(e)}` : "";
-          return `<span class="equip-tag">${e.name}${sv}</span>`;
+          return `<span class="equip-tag">${escapeHtml(e.name)}${sv}</span>`;
         }).join(" ")
       : "";
 
@@ -494,12 +500,12 @@ const updateState = (state) => {
       <div class="player-header">
         ${portraitHtml}
         <div>
-          <strong>${player.name}</strong>${hostBadge}
-          <p>${player.characterName}</p>
+          <strong>${escapeHtml(player.name)}</strong>${hostBadge}
+          <p>${escapeHtml(player.characterName)}</p>
         </div>
       </div>
-      <small>${player.characterDescription}</small>
-      <p class="role-line">Роль: ${player.role}</p>
+      <small>${escapeHtml(player.characterDescription)}</small>
+      <p class="role-line">Роль: ${escapeHtml(player.role)}</p>
       <p>ОЗ: ${player.hp} / ${player.maxHp} | Карты: ${player.handCount}</p>
       ${equipHtml ? `<div class="equip-row">${equipHtml}</div>` : ""}
       ${distanceHtml}
@@ -562,7 +568,7 @@ const updateState = (state) => {
 
   if (abilityButton) {
     const myChar = getMyCharacterName(state);
-    const me = state.players.find((p) => p.id === playerId);
+    const me = state.players.find((p) => p.id === state.yourPublicId);
     const canUseAbility = !isSpectator && isYourTurn && !state.gameOver && !hasPending &&
       myChar === "Сид Кетчум" && state.yourHand.length >= 2 &&
       me && me.hp < me.maxHp;
@@ -605,7 +611,7 @@ const showTargetOverlay = (card, index) => {
     : card.type;
 
   const availableTargets = currentState.players
-    .filter((player) => player.id !== playerId && player.isAlive)
+    .filter((player) => player.id !== currentState.yourPublicId && player.isAlive)
     .map((player) => {
       const dist = currentState.distances ? currentState.distances[player.id] : null;
       let outOfRange = false;
@@ -703,7 +709,7 @@ const showResponseOverlay = (pendingAction, state) => {
     responsePass.classList.add("hidden");
 
     const targets = state.players.filter(
-      (p) => p.id !== playerId && p.isAlive && p.handCount > 0
+      (p) => p.id !== state.yourPublicId && p.isAlive && p.handCount > 0
     );
     if (targets.length === 0) {
       const hint = document.createElement("div");
@@ -767,14 +773,13 @@ const hideResponseOverlay = () => {
 const respondToAction = async (responseType, cardIndex, targetId) => {
   if (!playerId) return;
   try {
-    const data = await apiPost("/api/respond", {
+    await apiPost("/api/respond", {
       playerId,
       responseType,
       cardIndex,
       targetId: targetId || null,
     });
     hideResponseOverlay();
-    updateState(data);
   } catch (error) {
     setStatus(error.message);
   }
@@ -866,12 +871,11 @@ const hideAbilityOverlay = () => {
 const useAbility = async () => {
   if (!playerId || abilitySelectedIndices.length !== 2) return;
   try {
-    const data = await apiPost("/api/ability", {
+    await apiPost("/api/ability", {
       playerId,
       cardIndices: abilitySelectedIndices,
     });
     hideAbilityOverlay();
-    updateState(data);
   } catch (error) {
     setStatus(error.message);
   }
@@ -998,8 +1002,8 @@ const renderRoomList = (rooms) => {
     item.className = "room-item";
     item.innerHTML = `
       <div>
-        <strong class="room-code-badge">${room.roomCode}</strong>
-        <span>${room.statusText}</span>
+        <strong class="room-code-badge">${escapeHtml(room.roomCode)}</strong>
+        <span>${escapeHtml(room.statusText)}</span>
         <small>
           ${room.playerCount} ${formatCountLabel(room.playerCount, "игрок", "игрока", "игроков")},
           ${room.spectatorCount} ${formatCountLabel(room.spectatorCount, "зритель", "зрителя", "зрителей")}
@@ -1026,8 +1030,7 @@ const startGame = async () => {
   }
 
   try {
-    const data = await apiPost("/api/start", { playerId });
-    updateState(data);
+    await apiPost("/api/start", { playerId });
   } catch (error) {
     setStatus(error.message);
   }
@@ -1039,13 +1042,12 @@ const playCard = async (index, targetId) => {
   }
 
   try {
-    const data = await apiPost("/api/play", {
+    await apiPost("/api/play", {
       playerId,
       cardIndex: index,
       targetId,
     });
     hideTargetOverlay();
-    updateState(data);
   } catch (error) {
     hideTargetOverlay();
     setStatus(error.message);
@@ -1058,8 +1060,7 @@ const endTurn = async () => {
   }
 
   try {
-    const data = await apiPost("/api/end", { playerId });
-    updateState(data);
+    await apiPost("/api/end", { playerId });
   } catch (error) {
     setStatus(error.message);
   }
@@ -1076,9 +1077,8 @@ const sendChat = async () => {
   }
 
   try {
-    const data = await apiPost("/api/chat", { playerId, text });
+    await apiPost("/api/chat", { playerId, text });
     chatInput.value = "";
-    updateState(data);
   } catch (error) {
     setStatus(error.message);
   }
@@ -1087,8 +1087,7 @@ const sendChat = async () => {
 const newGame = async () => {
   if (!playerId) return;
   try {
-    const data = await apiPost("/api/newgame", { playerId });
-    updateState(data);
+    await apiPost("/api/newgame", { playerId });
   } catch (error) {
     setStatus(error.message);
   }
