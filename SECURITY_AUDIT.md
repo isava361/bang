@@ -27,10 +27,10 @@ of any player.
 target selection. Map `publicId -> playerId` on the server when processing
 actions.
 
-- [ ] Add `PublicId` field to `PlayerState`
-- [ ] Replace `p.Id` with `p.PublicId` in `ToView()` and `ToSpectatorView()`
-- [ ] Add server-side `publicId -> playerId` mapping in target resolution
-- [ ] Update frontend to use `publicId` for targeting
+- [x] Add `PublicId` field to `PlayerState`
+- [x] Replace `p.Id` with `p.PublicId` in `ToView()` and `ToSpectatorView()`
+- [x] Add server-side `publicId -> playerId` mapping in target resolution
+- [x] Update frontend to use `publicId` for targeting
 
 ---
 
@@ -48,9 +48,9 @@ every other player's browser. The server only validates length and emptiness.
 
 **Fix (choose one or both):**
 
-- [ ] Server-side: strip or encode HTML characters (`<`, `>`, `"`, `'`, `&`) in
+- [x] Server-side: strip or encode HTML characters (`<`, `>`, `"`, `'`, `&`) in
       player names on join (`/api/join`)
-- [ ] Client-side: use `textContent` instead of `innerHTML` for player names, or
+- [x] Client-side: use `textContent` instead of `innerHTML` for player names, or
       build DOM elements with `document.createElement` instead of template literals
 
 ---
@@ -80,9 +80,9 @@ No rate limiting on any endpoint. Attackers can spam room creation, chat, joins.
 
 **Fix:**
 
-- [ ] Add `builder.Services.AddRateLimiter()` with per-IP policies
-- [ ] Apply `RequireRateLimiting()` to all POST endpoints
-- [ ] Example policy: 10 requests/second per IP for game actions, 1
+- [x] Add `builder.Services.AddRateLimiter()` with per-IP policies
+- [x] Apply `RequireRateLimiting()` to all POST endpoints
+- [x] Example policy: 10 requests/second per IP for game actions, 1
       request/second for room creation
 
 ```csharp
@@ -115,7 +115,7 @@ room codes are exhausted, `GenerateRoomCode()` enters an infinite loop.
 
 **Fix:**
 
-- [ ] Add a maximum room count (e.g. 100) in `CreateRoom()`, return error when
+- [x] Add a maximum room count (e.g. 100) in `CreateRoom()`, return error when
       exceeded
 - [ ] Require a `playerId` or IP to create a room
 - [ ] Add a safety check in `GenerateRoomCode()` to bail out after N attempts
@@ -131,7 +131,7 @@ and broadcast to all clients via SignalR on every state update.
 
 **Fix:**
 
-- [ ] Add a length limit (e.g. 200 characters) in `AddChat()`:
+- [x] Add a length limit (e.g. 200 characters) in `AddChat()`:
       ```csharp
       if (text.Trim().Length > 200)
           return new CommandResult(false, "Сообщение слишком длинное.");
@@ -148,7 +148,7 @@ connection, or `JoinRoom("XXXX")` to listen to any room.
 
 **Fix:**
 
-- [ ] In `Register()`: validate that the `connectionId` belongs to the player
+- [x] In `Register()`: validate that the `connectionId` belongs to the player
       (e.g. via a token passed during connection)
 - [ ] In `JoinRoom()`: verify the caller is actually in the room before adding
       to the SignalR group
@@ -165,7 +165,7 @@ No `AddCors()` or `UseCors()`. Any website can make API requests to the server.
 
 **Fix:**
 
-- [ ] Add CORS with explicit allowed origin:
+- [x] Add CORS with explicit allowed origin:
       ```csharp
       builder.Services.AddCors(options =>
       {
@@ -223,7 +223,7 @@ newlines. Players can impersonate others visually or break UI layout.
 
 **Fix:**
 
-- [ ] Allow only printable characters (letters, digits, spaces, basic
+- [x] Allow only printable characters (letters, digits, spaces, basic
       punctuation) via regex:
       ```csharp
       if (!Regex.IsMatch(name, @"^[\p{L}\p{N}\s\-_]{1,16}$"))
@@ -240,7 +240,7 @@ newlines. Players can impersonate others visually or break UI layout.
 
 **Fix:**
 
-- [ ] Addressed automatically once #2 (XSS) is fixed
+- [x] Addressed automatically once #2 (XSS) is fixed
 - [ ] For defense in depth: use HttpOnly cookies for session tokens instead of
       localStorage (requires #3)
 
@@ -256,7 +256,7 @@ times.
 
 **Fix:**
 
-- [ ] Addressed partially by #6 (chat length limit)
+- [x] Addressed partially by #6 (chat length limit)
 - [ ] Consider sending incremental updates (deltas) instead of full state
 - [ ] Or at minimum, exclude chat/events from state and send them separately
 
@@ -287,7 +287,7 @@ full payload before validation.
 
 **Fix:**
 
-- [ ] Configure Kestrel max request body size:
+- [x] Configure Kestrel max request body size:
       ```csharp
       builder.WebHost.ConfigureKestrel(options =>
       {
@@ -308,7 +308,7 @@ players close the browser without leaving, rooms persist forever.
 
 - [ ] Add a background cleanup task (`IHostedService`) that removes rooms with
       no active SignalR connections after a timeout (e.g. 10 minutes)
-- [ ] Or add a heartbeat mechanism via SignalR `OnDisconnectedAsync`
+- [x] Or add a heartbeat mechanism via SignalR `OnDisconnectedAsync`
 
 ---
 

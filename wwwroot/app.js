@@ -53,6 +53,7 @@ let lastStateJson = null;
 let selectedCard = null;
 let abilitySelectedIndices = [];
 let connection = null;
+let statePollTimer = null;
 
 const computeTablePositions = (count) => {
   const positions = [];
@@ -413,6 +414,8 @@ const updateState = (state) => {
   lastStateJson = stateJson;
 
   currentState = state;
+  playerId = state.yourPublicId || playerId;
+  roomCode = state.roomCode || roomCode;
   const isSpectator = !!state.isSpectator;
   if (spectatorBanner) {
     spectatorBanner.classList.toggle("hidden", !isSpectator);
@@ -774,12 +777,12 @@ const respondToAction = async (responseType, cardIndex, targetId) => {
   if (!playerId) return;
   try {
     await apiPost("/api/respond", {
-      playerId,
       responseType,
       cardIndex,
       targetId: targetId || null,
     });
     hideResponseOverlay();
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -872,10 +875,10 @@ const useAbility = async () => {
   if (!playerId || abilitySelectedIndices.length !== 2) return;
   try {
     await apiPost("/api/ability", {
-      playerId,
       cardIndices: abilitySelectedIndices,
     });
     hideAbilityOverlay();
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -896,6 +899,41 @@ const apiPost = async (url, body) => {
   }
 
   return payload.data;
+};
+
+const syncState = async () => {
+  if (!playerId) return;
+  try {
+    const response = await fetch("/api/state");
+    const payload = await response.json();
+    if (response.ok && payload.data) updateState(payload.data);
+  } catch {}
+};
+
+const startStatePolling = () => {
+  if (statePollTimer) return;
+  statePollTimer = setInterval(() => {
+    if (!playerId || !gamePanel || gamePanel.classList.contains("hidden")) return;
+    syncState();
+  }, 1200);
+};
+
+const stopStatePolling = () => {
+  if (!statePollTimer) return;
+  clearInterval(statePollTimer);
+  statePollTimer = null;
+};
+
+const restartSignalR = async () => {
+  if (!connection) return;
+  try {
+    if (connection.state === "Connected" || connection.state === "Connecting" || connection.state === "Reconnecting") {
+      await connection.stop();
+    }
+    await connection.start();
+  } catch (err) {
+    console.error("SignalR restart failed:", err);
+  }
 };
 
 const enterLobby = () => {
@@ -935,21 +973,22 @@ const joinRoom = async (code) => {
     return;
   }
   try {
-    const data = await apiPost("/api/join", { name, roomCode: code });
-    playerId = data.playerId;
-    roomCode = code;
-    localStorage.setItem("bangPlayerId", playerId);
+    const state = await apiPost("/api/join", { name, roomCode: code });
+    playerId = state.yourPublicId || null;
+    roomCode = state.roomCode || code;
     localStorage.setItem("bangPlayerName", name);
-    localStorage.setItem("bangRoomCode", code);
     if (lobbyPanel) lobbyPanel.classList.add("hidden");
     joinPanel.classList.add("hidden");
     gamePanel.classList.remove("hidden");
     setStatus(`Подключены как ${name}`);
-    updateState(data.state);
-    if (connection && connection.state === "Connected") {
-      connection.invoke("LeaveRoom", "lobby").catch(() => {});
-      connection.invoke("Register", playerId).catch(() => {});
-      connection.invoke("JoinRoom", code).catch(() => {});
+    updateState(state);
+    startStatePolling();
+    if (connection) {
+      await restartSignalR();
+      if (connection.state === "Connected") {
+        connection.invoke("Register").catch(() => {});
+        connection.invoke("JoinRoom", roomCode || code).catch(() => {});
+      }
     }
   } catch (error) {
     setStatus(error.message);
@@ -960,7 +999,7 @@ const leaveRoom = async () => {
   if (!playerId) return;
   const oldRoom = roomCode;
   try {
-    await apiPost("/api/leave", { playerId });
+    await apiPost("/api/leave", {});
   } catch {}
   if (connection && connection.state === "Connected" && oldRoom) {
     connection.invoke("LeaveRoom", oldRoom).catch(() => {});
@@ -969,8 +1008,7 @@ const leaveRoom = async () => {
   roomCode = null;
   currentState = null;
   lastStateJson = null;
-  localStorage.removeItem("bangPlayerId");
-  localStorage.removeItem("bangRoomCode");
+  stopStatePolling();
   gamePanel.classList.add("hidden");
   enterLobby();
   setStatus("Вы вышли из комнаты.");
@@ -982,9 +1020,10 @@ const renamePlayer = async () => {
   const newName = prompt("Введите новое имя:", currentName);
   if (!newName || !newName.trim() || newName.trim() === currentName) return;
   try {
-    await apiPost("/api/rename", { playerId, newName: newName.trim() });
+    await apiPost("/api/rename", { newName: newName.trim() });
     localStorage.setItem("bangPlayerName", newName.trim());
     setStatus(`Имя изменено на ${newName.trim()}`);
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -1030,7 +1069,8 @@ const startGame = async () => {
   }
 
   try {
-    await apiPost("/api/start", { playerId });
+    await apiPost("/api/start", {});
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -1043,11 +1083,11 @@ const playCard = async (index, targetId) => {
 
   try {
     await apiPost("/api/play", {
-      playerId,
       cardIndex: index,
       targetId,
     });
     hideTargetOverlay();
+    await syncState();
   } catch (error) {
     hideTargetOverlay();
     setStatus(error.message);
@@ -1060,7 +1100,8 @@ const endTurn = async () => {
   }
 
   try {
-    await apiPost("/api/end", { playerId });
+    await apiPost("/api/end", {});
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -1077,8 +1118,9 @@ const sendChat = async () => {
   }
 
   try {
-    await apiPost("/api/chat", { playerId, text });
+    await apiPost("/api/chat", { text });
     chatInput.value = "";
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -1087,7 +1129,8 @@ const sendChat = async () => {
 const newGame = async () => {
   if (!playerId) return;
   try {
-    await apiPost("/api/newgame", { playerId });
+    await apiPost("/api/newgame", {});
+    await syncState();
   } catch (error) {
     setStatus(error.message);
   }
@@ -1153,36 +1196,28 @@ chatInput.addEventListener("keydown", (event) => {
 renderLibrary();
 
 const tryReconnect = async () => {
-  const savedId = localStorage.getItem("bangPlayerId");
   const savedName = localStorage.getItem("bangPlayerName");
-  const savedRoom = localStorage.getItem("bangRoomCode");
-  if (!savedId) {
-    if (savedName) enterLobby();
-    return;
-  }
   try {
-    const response = await fetch(`/api/reconnect?playerId=${savedId}`);
+    const response = await fetch("/api/reconnect");
     const payload = await response.json();
     if (response.ok && payload.data) {
-      playerId = savedId;
-      roomCode = savedRoom;
+      const state = payload.data;
+      playerId = state.yourPublicId || null;
+      roomCode = state.roomCode || null;
       joinPanel.classList.add("hidden");
       if (lobbyPanel) lobbyPanel.classList.add("hidden");
       gamePanel.classList.remove("hidden");
       setStatus(`Переподключены как ${savedName || "игрок"}`);
-      updateState(payload.data);
+      updateState(state);
+      startStatePolling();
       if (connection && connection.state === "Connected") {
-        connection.invoke("Register", playerId).catch(() => {});
+        connection.invoke("Register").catch(() => {});
         if (roomCode) connection.invoke("JoinRoom", roomCode).catch(() => {});
       }
-    } else {
-      localStorage.removeItem("bangPlayerId");
-      localStorage.removeItem("bangRoomCode");
-      if (savedName) enterLobby();
+    } else if (savedName) {
+      enterLobby();
     }
   } catch {
-    localStorage.removeItem("bangPlayerId");
-    localStorage.removeItem("bangRoomCode");
     if (savedName) enterLobby();
   }
 };
@@ -1203,12 +1238,12 @@ const initSignalR = async () => {
 
   connection.onreconnected(async () => {
     if (playerId) {
-      await connection.invoke("Register", playerId).catch(() => {});
+      await connection.invoke("Register").catch(() => {});
     }
     if (roomCode) {
       await connection.invoke("JoinRoom", roomCode).catch(() => {});
       try {
-        const response = await fetch(`/api/reconnect?playerId=${playerId}`);
+        const response = await fetch("/api/reconnect");
         const payload = await response.json();
         if (response.ok && payload.data) updateState(payload.data);
       } catch {}
@@ -1220,6 +1255,14 @@ const initSignalR = async () => {
 
   try {
     await connection.start();
+    if (connection.state === "Connected") {
+      if (playerId) {
+        await connection.invoke("Register").catch(() => {});
+        if (roomCode) await connection.invoke("JoinRoom", roomCode).catch(() => {});
+      } else if (!lobbyPanel?.classList.contains("hidden")) {
+        await connection.invoke("JoinRoom", "lobby").catch(() => {});
+      }
+    }
   } catch (err) {
     console.error("SignalR connection failed:", err);
   }
@@ -1227,3 +1270,9 @@ const initSignalR = async () => {
 
 initSignalR();
 tryReconnect();
+
+
+
+
+
+
