@@ -122,9 +122,15 @@ partial class GameState
                 {
                     // RemoveFromTurnOrder already adjusted _turnIndex
                     if (_turnOrder.Count == 0) return;
-                    var next = _players[_turnOrder[_turnIndex]];
-                    if (!next.IsAlive) return;
-                    BeginTurn(next);
+                    for (var i = 0; i < _turnOrder.Count; i++)
+                    {
+                        var idx = (_turnIndex + i) % _turnOrder.Count;
+                        var next = _players[_turnOrder[idx]];
+                        if (!next.IsAlive) continue;
+                        _turnIndex = idx;
+                        BeginTurn(next);
+                        return;
+                    }
                     return;
                 }
             }
