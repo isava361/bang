@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bang! Онлайн</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <header class="top-bar">
+    <div>
+      <h1>Bang! Онлайн</h1>
+      <p class="subtitle">Веб-прототип — тяните, кликайте и играйте картами</p>
+    </div>
+    <div class="status" id="connectionStatus">Отключено</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel" id="joinPanel">
+      <h2>Присоединиться</h2>
+      <p>Введите имя, чтобы найти или создать стол.</p>
+      <label class="stack">
+        Имя
+        <input id="playerName" type="text" placeholder="Лаки Дьюк" maxlength="16" />
+      </label>
+      <button id="joinButton" class="primary">Продолжить</button>
+    </section>
+
+    <section class="panel hidden" id="lobbyPanel">
+      <h2>Лобби</h2>
+      <div class="lobby-actions">
+        <button id="createRoomButton" class="primary">Создать комнату</button>
+        <div class="join-room-row">
+          <input id="roomCodeInput" type="text" placeholder="Код комнаты" maxlength="4" />
+          <button id="joinRoomButton">Войти</button>
+        </div>
+      </div>
+      <h3>Доступные комнаты</h3>
+      <div id="roomList" class="room-list">
+        <p class="hint">Пока нет комнат. Создайте!</p>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="gamePanel">
+      <!-- Game header: always visible -->
+      <div class="game-header">
+        <div class="game-header__left">
+          <span id="roomCodeBadge" class="room-code-badge hidden"></span>
+          <h2>Стол</h2>
+          <p id="turnInfo">Ожидание игроков…</p>
+        </div>
+        <div class="actions" id="gameActions">
+          <button id="startButton">Начать игру</button>
+          <button id="endTurnButton">Завершить ход</button>
+          <button id="abilityButton" class="hidden">Способность</button>
+          <button id="newGameButton" class="primary hidden">Новая игра</button>
+          <button id="renameButton" class="secondary">Сменить имя</button>
+          <button id="leaveButton" class="secondary">Выйти</button>
+        </div>
+      </div>
+      <div id="settingsPanel" class="settings-panel hidden">
+        <h3>Дополнения</h3>
+        <label class="settings-check"><input type="checkbox" id="settDodgeCity" /> Dodge City</label>
+        <label class="settings-check"><input type="checkbox" id="settHighNoon" /> High Noon</label>
+        <label class="settings-check"><input type="checkbox" id="settFistful" /> A Fistful of Cards</label>
+      </div>
+      <div id="spectatorBanner" class="spectator-banner hidden">Вы наблюдаете за игрой.</div>
+      <div id="eventBanner" class="event-banner hidden"></div>
+
+      <!-- Tab section: Table -->
+      <div class="tab-section" data-tab-section="table">
+        <div class="players" id="players"></div>
+      </div>
+
+      <!-- Tab section: Hand -->
+      <div class="tab-section" data-tab-section="hand">
+        <div class="hand">
+          <div class="hand-header">
+            <h3>Ваша рука</h3>
+            <p id="handHint">Нажмите на карту, чтобы сыграть.</p>
+          </div>
+          <div class="hand-cards" id="handCards"></div>
+        </div>
+      </div>
+
+      <!-- Tab section: Chat + Event Log -->
+      <div class="tab-section" data-tab-section="chat">
+        <div class="event-log">
+          <h3>Журнал событий</h3>
+          <div id="eventLog" class="event-list">
+            <p class="hint">Событий пока нет.</p>
+          </div>
+        </div>
+        <div class="chat">
+          <h3>Чат</h3>
+          <div id="chatLog" class="chat-list"></div>
+          <div class="chat-row">
+            <input id="chatInput" type="text" placeholder="Напишите сообщение…" />
+            <button id="chatButton">Отправить</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile tab bar (fixed at bottom) -->
+      <nav class="tab-bar hidden" id="tabBar">
+        <button class="tab-btn active" data-tab="table">
+          <span class="tab-icon">&#9878;</span>
+          <span class="tab-label">Стол</span>
+        </button>
+        <button class="tab-btn" data-tab="hand">
+          <span class="tab-icon">&#9995;</span>
+          <span class="tab-label">Рука</span>
+        </button>
+        <button class="tab-btn" data-tab="chat">
+          <span class="tab-icon">&#128172;</span>
+          <span class="tab-label">Чат</span>
+        </button>
+        <button class="tab-btn" data-tab="info">
+          <span class="tab-icon">&#9881;</span>
+          <span class="tab-label">Меню</span>
+        </button>
+      </nav>
+    </section>
+
+    <aside class="panel library">
+      <h2>Библиотека карт</h2>
+      <div id="cardLibrary" class="library-grid"></div>
+      <h2>Персонажи</h2>
+      <div id="characterLibrary" class="library-grid"></div>
+      <h2>Роли</h2>
+      <div id="roleLibrary" class="library-grid"></div>
+    </aside>
+  </main>
+
+  <div class="overlay hidden" id="targetOverlay">
+    <div class="overlay-card">
+      <h3>Выберите цель</h3>
+      <p id="targetPrompt">Выберите, кого должна затронуть эта карта.</p>
+      <div class="target-list" id="targetList"></div>
+      <button id="cancelTarget" class="secondary">Отмена</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="responseOverlay">
+    <div class="overlay-card">
+      <h3 id="responseTitle">Ответ</h3>
+      <p id="responsePrompt">Выберите способ ответа.</p>
+      <div class="target-list" id="responseCards"></div>
+      <button id="responsePass" class="secondary">Принять удар</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="abilityOverlay">
+    <div class="overlay-card">
+      <h3>Сид Кетчум — Лечение</h3>
+      <p>Выберите 2 карты для сброса и восстановите 1 ОЗ.</p>
+      <div class="target-list" id="abilityCards"></div>
+      <div class="actions">
+        <button id="abilityConfirm" class="primary" disabled>Подтвердить</button>
+        <button id="cancelAbility" class="secondary">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

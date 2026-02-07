@@ -4,7 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bang! Онлайн</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/index-CoqQ-4mO.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CPDXp4v-.css">
 </head>
 <body>
   <header class="top-bar">
@@ -42,13 +46,14 @@
     </section>
 
     <section class="panel hidden" id="gamePanel">
-      <div class="panel-row">
-        <div>
+      <!-- Game header: always visible -->
+      <div class="game-header">
+        <div class="game-header__left">
           <span id="roomCodeBadge" class="room-code-badge hidden"></span>
           <h2>Стол</h2>
           <p id="turnInfo">Ожидание игроков…</p>
         </div>
-        <div class="actions">
+        <div class="actions" id="gameActions">
           <button id="startButton">Начать игру</button>
           <button id="endTurnButton">Завершить ход</button>
           <button id="abilityButton" class="hidden">Способность</button>
@@ -57,33 +62,68 @@
           <button id="leaveButton" class="secondary">Выйти</button>
         </div>
       </div>
+      <div id="settingsPanel" class="settings-panel hidden">
+        <h3>Дополнения</h3>
+        <label class="settings-check"><input type="checkbox" id="settDodgeCity" /> Dodge City</label>
+        <label class="settings-check"><input type="checkbox" id="settHighNoon" /> High Noon</label>
+        <label class="settings-check"><input type="checkbox" id="settFistful" /> A Fistful of Cards</label>
+      </div>
       <div id="spectatorBanner" class="spectator-banner hidden">Вы наблюдаете за игрой.</div>
+      <div id="eventBanner" class="event-banner hidden"></div>
 
-      <div class="players" id="players"></div>
-
-      <div class="hand">
-        <div class="hand-header">
-          <h3>Ваша рука</h3>
-          <p id="handHint">Нажмите на карту, чтобы сыграть.</p>
-        </div>
-        <div class="hand-cards" id="handCards"></div>
+      <!-- Tab section: Table -->
+      <div class="tab-section" data-tab-section="table">
+        <div class="players" id="players"></div>
       </div>
 
-      <div class="event-log">
-        <h3>Журнал событий</h3>
-        <div id="eventLog" class="event-list">
-          <p class="hint">Событий пока нет.</p>
+      <!-- Tab section: Hand -->
+      <div class="tab-section" data-tab-section="hand">
+        <div class="hand">
+          <div class="hand-header">
+            <h3>Ваша рука</h3>
+            <p id="handHint">Нажмите на карту, чтобы сыграть.</p>
+          </div>
+          <div class="hand-cards" id="handCards"></div>
         </div>
       </div>
 
-      <div class="chat">
-        <h3>Чат</h3>
-        <div id="chatLog" class="chat-list"></div>
-        <div class="chat-row">
-          <input id="chatInput" type="text" placeholder="Напишите сообщение…" />
-          <button id="chatButton">Отправить</button>
+      <!-- Tab section: Chat + Event Log -->
+      <div class="tab-section" data-tab-section="chat">
+        <div class="event-log">
+          <h3>Журнал событий</h3>
+          <div id="eventLog" class="event-list">
+            <p class="hint">Событий пока нет.</p>
+          </div>
+        </div>
+        <div class="chat">
+          <h3>Чат</h3>
+          <div id="chatLog" class="chat-list"></div>
+          <div class="chat-row">
+            <input id="chatInput" type="text" placeholder="Напишите сообщение…" />
+            <button id="chatButton">Отправить</button>
+          </div>
         </div>
       </div>
+
+      <!-- Mobile tab bar (fixed at bottom) -->
+      <nav class="tab-bar hidden" id="tabBar">
+        <button class="tab-btn active" data-tab="table">
+          <span class="tab-icon">&#9878;</span>
+          <span class="tab-label">Стол</span>
+        </button>
+        <button class="tab-btn" data-tab="hand">
+          <span class="tab-icon">&#9995;</span>
+          <span class="tab-label">Рука</span>
+        </button>
+        <button class="tab-btn" data-tab="chat">
+          <span class="tab-icon">&#128172;</span>
+          <span class="tab-label">Чат</span>
+        </button>
+        <button class="tab-btn" data-tab="info">
+          <span class="tab-icon">&#9881;</span>
+          <span class="tab-label">Меню</span>
+        </button>
+      </nav>
     </section>
 
     <aside class="panel library">
@@ -125,8 +165,6 @@
       </div>
     </div>
   </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-  <script src="app.js"></script>
+
 </body>
 </html>

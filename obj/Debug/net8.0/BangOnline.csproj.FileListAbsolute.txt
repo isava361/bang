@@ -23,3 +23,6 @@ C:\Users\Ivan\OneDrive\Документы\GitHub\bang\obj\Debug\net8.0\refint\Ba
 C:\Users\Ivan\OneDrive\Документы\GitHub\bang\obj\Debug\net8.0\BangOnline.pdb
 C:\Users\Ivan\OneDrive\Документы\GitHub\bang\obj\Debug\net8.0\BangOnline.genruntimeconfig.cache
 C:\Users\Ivan\OneDrive\Документы\GitHub\bang\obj\Debug\net8.0\ref\BangOnline.dll
+C:\Users\Ivan\OneDrive\Документы\GitHub\bang\bin\Debug\net8.0\package-lock.json
+C:\Users\Ivan\OneDrive\Документы\GitHub\bang\bin\Debug\net8.0\package.json
+C:\Users\Ivan\OneDrive\Документы\GitHub\bang\bin\Debug\net8.0\tsconfig.json

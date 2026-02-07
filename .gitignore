@@ -1,0 +1,6 @@
+node_modules/
+.vite/
+*.tsbuildinfo
+wwwroot/
+bin/
+obj/

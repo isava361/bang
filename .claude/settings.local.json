@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build:*)",
-      "Bash(ls \"C:\\\\Users\\\\Ivan\\\\OneDrive\\\\Документы\\\\GitHub\\\\bang\\\\wwwroot\\\\assets\\\\cards\"\" 2>nul || echo \"Directory not found \")"
+      "Bash(ls \"C:\\\\Users\\\\Ivan\\\\OneDrive\\\\Документы\\\\GitHub\\\\bang\\\\wwwroot\\\\assets\\\\cards\"\" 2>nul || echo \"Directory not found \")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(ls -la \"C:\\\\Users\\\\Ivan\\\\OneDrive\\\\Документы\\\\GitHub\\\\bang\\\\public\\\\assets\\\\backgrounds\"\" 2>/dev/null || dir \"C:UsersIvanOneDriveДокументыGitHubbangpublicassetsbackgrounds\" 2>/dev/null || echo \"dir not found \")",
+      "Bash(find:*)",
+      "Bash(where:*)",
+      "Bash(npx --yes sharp-cli:*)",
+      "Bash(npx sharp-cli:*)",
+      "Bash(du:*)",
+      "Bash(ls:*)",
+      "Bash(powershell:*)"
     ]
   }
 }
