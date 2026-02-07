@@ -77,6 +77,7 @@ export interface RoomInfo {
 export interface CardReference {
   name: string;
   type: string;
+  category: string;
   description: string;
   imagePath: string;
 }

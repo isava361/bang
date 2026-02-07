@@ -146,12 +146,17 @@ export const renderLibrary = (): void => {
   cardLibrary.innerHTML = "";
   cardsReference.forEach((card) => {
     const item = document.createElement("div");
-    item.className = "library-item";
+    const catKey = card.category === "Weapon" ? "weapon" : card.category.toLowerCase();
+    item.className = `library-item card--cat-${catKey}`;
+    const catLabel = card.category === "Weapon" ? cardCategoryLabels["Blue"] : cardCategoryLabels[card.category];
+    const tagColorMap: Record<string, string> = { Brown: "tag--cat-brown", Blue: "tag--cat-blue", Weapon: "tag--cat-blue", Green: "tag--cat-green" };
+    const tagClass = tagColorMap[card.category] || "equip";
+    const catTag = catLabel ? `<span class="tag ${tagClass}">${catLabel}</span>` : "";
     item.innerHTML = `
       <div class="library-row">
         <img class="library-image" src="${card.imagePath}" alt="${card.name}" loading="lazy" onerror="this.style.display='none'"/>
         <div>
-          <strong>${card.name}</strong>
+          <strong>${card.name}</strong> ${catTag}
           <p>${card.description}</p>
         </div>
       </div>
@@ -898,7 +903,7 @@ export const updateState = (stateView: GameStateView): void => {
       if (card.category !== "Green" || reactiveGreenTypes.has(card.type) || card.isFresh) return;
       const btn = document.createElement("button");
       btn.className = "green-use-btn";
-      btn.textContent = `\u0410\u043A\u0442\u0438\u0432\u0438\u0440\u043E\u0432\u0430\u0442\u044C: ${card.name}`;
+      btn.innerHTML = `<strong>\u0410\u043A\u0442\u0438\u0432\u0438\u0440\u043E\u0432\u0430\u0442\u044C: ${escapeHtml(card.name)}</strong><br><small>${escapeHtml(card.description)}</small>`;
       if (activeGreenTargeted.has(card.type)) {
         btn.addEventListener("click", () => showGreenCardTargetOverlay(idx, card));
       } else if (activeGreenUntargeted.has(card.type)) {

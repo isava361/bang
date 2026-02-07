@@ -27,7 +27,7 @@ partial class GameState
                 return new CommandResult(false, "Эта карта активируется только в ответ на атаку.");
 
             if (player.FreshGreenCards.Contains(card))
-                return new CommandResult(false, "This green card can only be used starting from your next turn.");
+                return new CommandResult(false, "Эту карту можно активировать только со следующего хода.");
 
             // Validate target for cards that need one
             PlayerState? target = null;
@@ -47,6 +47,10 @@ partial class GameState
                         return new CommandResult(false, $"{target.Name} вне зоны досягаемости (дистанция {distance}, нужно 1).");
                 }
             }
+
+            // Canteen: early check before consuming the card
+            if (card.Type == CardType.Canteen && player.Hp >= player.MaxHp)
+                return new CommandResult(false, $"У {player.Name} уже максимальное здоровье.");
 
             // Remove green card from play and discard
             player.InPlay.RemoveAt(greenCardIndex);
@@ -140,15 +144,8 @@ partial class GameState
                     break;
 
                 case CardType.Canteen:
-                    if (player.Hp >= player.MaxHp)
-                    {
-                        message = $"У {player.Name} уже максимальное здоровье.";
-                    }
-                    else
-                    {
-                        player.Hp = Math.Min(player.Hp + 1, player.MaxHp);
-                        message = $"{player.Name} использует Флягу и восстанавливает 1 ОЗ.";
-                    }
+                    player.Hp = Math.Min(player.Hp + 1, player.MaxHp);
+                    message = $"{player.Name} использует Флягу и восстанавливает 1 ОЗ.";
                     break;
 
                 default:

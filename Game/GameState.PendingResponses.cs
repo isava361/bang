@@ -104,7 +104,7 @@ partial class GameState
                         }
                         if (responder.FreshGreenCards.Contains(greenCard))
                         {
-                            return new CommandResult(false, "This green card is not active yet.");
+                            return new CommandResult(false, "Эту карту можно активировать только со следующего хода.");
                         }
                         responder.InPlay.RemoveAt(cardIndex.Value);
                         _discardPile.Add(greenCard);

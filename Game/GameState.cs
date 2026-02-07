@@ -682,7 +682,7 @@ partial class GameState
                     if (jIdx < 0 || jIdx >= player.Hand.Count)
                         return new CommandResult(false, "Неверный индекс карты.");
                     var jCard = player.Hand[jIdx];
-                    if (jCard.Category != CardCategory.Blue)
+                    if (jCard.Category != CardCategory.Blue && jCard.Category != CardCategory.Weapon)
                         return new CommandResult(false, "Нужно сбросить синюю карту.");
                     player.Hand.RemoveAt(jIdx);
                     _discardPile.Add(jCard);

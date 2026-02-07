@@ -492,7 +492,6 @@ button:disabled {
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   border: 2px solid rgba(255, 255, 255, 0.08);
-  border-left: 3px solid transparent;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -504,19 +503,11 @@ button:disabled {
     border-color var(--transition-normal);
 }
 
-/* Category outline */
+/* Category outline — full border matches card color */
 .card--cat-brown { border-color: rgba(212, 146, 58, 0.7); }
 .card--cat-blue { border-color: rgba(74, 158, 218, 0.7); }
 .card--cat-green { border-color: rgba(107, 196, 107, 0.7); }
-/* Weapon cards are treated as blue cards for outline color. */
 .card--cat-weapon { border-color: rgba(74, 158, 218, 0.7); }
-
-/* Type-specific left border */
-.card--attack { border-left-color: var(--color-card-attack); }
-.card--defense { border-left-color: var(--color-card-defense); }
-.card--weapon { border-left-color: var(--color-card-weapon); }
-.card--equipment { border-left-color: var(--color-card-equipment); }
-.card--utility { border-left-color: var(--color-card-utility); }
 
 /* 3D hover */
 .card:hover {
@@ -582,6 +573,9 @@ button:disabled {
   background: rgba(74, 158, 218, 0.15);
   color: #8ac4ea;
 }
+.tag--cat-brown { background: rgba(212, 146, 58, 0.15); color: #e4b86a; }
+.tag--cat-blue { background: rgba(74, 158, 218, 0.15); color: #8ac4ea; }
+.tag--cat-green { background: rgba(107, 196, 107, 0.15); color: #8fd68f; }
 
 .card-tooltip {
   position: absolute;
@@ -722,7 +716,7 @@ button:disabled {
 .library-item {
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  border: var(--border-subtle);
+  border: 2px solid rgba(255, 255, 255, 0.08);
   background: rgba(30, 27, 20, 0.8);
 }
 
@@ -904,7 +898,7 @@ button:disabled {
 .green-use-btn {
   display: inline-block;
   margin: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid #4a9;
   border-radius: var(--radius-sm);
   background: rgba(70, 170, 100, 0.15);
@@ -912,6 +906,12 @@ button:disabled {
   font-size: 0.85rem;
   cursor: pointer;
   transition: background 0.15s;
+  text-align: left;
+  line-height: 1.4;
+}
+.green-use-btn small {
+  color: rgba(200, 255, 210, 0.7);
+  font-size: 0.78rem;
 }
 .green-use-btn:hover {
   background: rgba(70, 170, 100, 0.3);
